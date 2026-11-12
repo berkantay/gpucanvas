@@ -2,6 +2,10 @@
 
 Put thousands of live DOM nodes on an infinite canvas and let the GPU pan and zoom them.
 
+![The same 5,000 live React screens as plain DOM (left) and in gpucanvas (right), with each side's frame rate measured live](docs/benchmark.gif)
+
+The same session on both sides: 5,000 live React screens, the same camera path, a message typed and sent. Left, every screen is plain DOM under a CSS transform. Right, gpucanvas. Recorded in Chrome on a MacBook Pro; the frame rates are measured live in each run. Run it yourself with the demo below.
+
 Status: early. The API can still change, and it is not on npm yet.
 
 ```tsx
