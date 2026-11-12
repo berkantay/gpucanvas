@@ -1,0 +1,60 @@
+{
+  "name": "gpucanvas",
+  "version": "0.0.0",
+  "description": "Put thousands of live DOM nodes on an infinite canvas and let the GPU pan and zoom them.",
+  "keywords": [
+    "canvas",
+    "infinite-canvas",
+    "webgpu",
+    "html-in-canvas",
+    "react",
+    "dom",
+    "design-tools"
+  ],
+  "author": "Berkant Ay",
+  "homepage": "https://github.com/berkantay/gpucanvas#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/berkantay/gpucanvas.git"
+  },
+  "bugs": "https://github.com/berkantay/gpucanvas/issues",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx"
+  },
+  "scripts": {
+    "dev": "vite demo",
+    "build:demo": "vite build demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@remixicon/react": "^4.9.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@webgpu/types": "^0.1.60",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  },
+  "packageManager": "bun@1.3.12"
+}

@@ -1,0 +1,195 @@
+@import 'tailwindcss';
+@source './';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The demo's design tokens: text, surfaces, one accent scale and a type scale. Screens re-brand
+ * the accent per product (see `.brand`), everything else stays shared.
+ */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #404040;
+  --color-text-tertiary: #737373;
+  --color-text-link: var(--color-accent-600);
+  --color-background-primary-default: #ffffff;
+  --color-background-secondary-default: #f5f5f5;
+  --color-background-tertiary-default: #e9e9e9;
+  --color-background-full: #ffffff;
+  --color-border-button-default: #e5e5e5;
+  --color-button-primary: var(--color-accent-500);
+
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
+  --color-accent-950: #172554;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-dropdown: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.dark {
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #d4d4d4;
+  --color-text-tertiary: #a3a3a3;
+  --color-background-primary-default: #1c1c1c;
+  --color-background-secondary-default: #262626;
+  --color-background-tertiary-default: #303030;
+  --color-background-full: #111111;
+  --color-border-button-default: #2e2e2e;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-dropdown: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+
+/* Type scale: size, line height and weight in one class. */
+@utility text-display-2-semibold {
+  font-size: 56px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+@utility text-display-4-semibold {
+  font-size: 36px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+@utility text-title-1-semibold {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility text-title-2-semibold {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+}
+@utility text-title-2-medium {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+}
+@utility text-title-3-semibold {
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 600;
+}
+@utility text-title-3-medium {
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 500;
+}
+@utility text-title-3-regular {
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 400;
+}
+@utility text-headline-semibold {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+}
+@utility text-body-regular {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 400;
+}
+@utility text-body-medium {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 500;
+}
+@utility text-body-semibold {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+}
+@utility text-body-2-regular {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+@utility text-body-2-medium {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+@utility text-body-2-semibold {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+@utility text-caption-1-regular {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+@utility text-caption-1-medium {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+@utility text-caption-2-regular {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  /* The canvas sits one step below its surfaces: grey under white cards in light, near black
+     under dark grey cards in dark. */
+  background: var(--color-background-secondary-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark body {
+  background: var(--color-background-full);
+}
+
+/* A product's frame re-brands the screen: the whole accent scale comes from one --brand colour. */
+.brand {
+  --color-accent-50: color-mix(in oklab, var(--brand) 8%, white);
+  --color-accent-100: color-mix(in oklab, var(--brand) 16%, white);
+  --color-accent-200: color-mix(in oklab, var(--brand) 32%, white);
+  --color-accent-300: color-mix(in oklab, var(--brand) 52%, white);
+  --color-accent-400: color-mix(in oklab, var(--brand) 76%, white);
+  --color-accent-500: var(--brand);
+  --color-accent-600: color-mix(in oklab, var(--brand) 85%, black);
+  --color-accent-700: color-mix(in oklab, var(--brand) 70%, black);
+  --color-accent-800: color-mix(in oklab, var(--brand) 55%, black);
+  --color-accent-900: color-mix(in oklab, var(--brand) 42%, black);
+  --color-accent-950: color-mix(in oklab, var(--brand) 28%, black);
+}
+
+@keyframes thinking {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
