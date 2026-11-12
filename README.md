@@ -6,7 +6,11 @@ Put thousands of live DOM nodes on an infinite canvas and let the GPU pan and zo
 
 The same session on both sides: 5,000 live React screens, the same camera path, a message typed and sent. Left, every screen is plain DOM under a CSS transform. Right, gpucanvas. Recorded in Chrome on a MacBook Pro; the frame rates are measured live in each run. Run it yourself with the demo below.
 
-Status: early. The API can still change, and it is not on npm yet.
+Status: early (0.1). The API can still change.
+
+```sh
+npm install gpucanvas
+```
 
 ```tsx
 import { GpuCanvas, CanvasNode } from 'gpucanvas/react';
