@@ -7,7 +7,7 @@ import { fitCamera, supportsGpuCanvas, type GpuCanvas as GpuCanvasInstance } fro
 import { GpuCanvas } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
-import { startAgents } from './agents';
+import { startAgents, type Agents } from './agents';
 import { bindMarquee } from './marquee';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
@@ -29,6 +29,8 @@ const SHOWCASE = CLUSTERS.flatMap((cluster, id) =>
     ? [{ id, bounds: cluster.bounds, items: cluster.items }]
     : [],
 );
+/** The canvas opens on this cluster, its screens blank, and the agents build them first. */
+const INTRO = AGENTS > 0 ? (SHOWCASE[0]?.bounds ?? null) : null;
 /** Nodes mounted once the first `n` clusters are. */
 const MOUNTED_NODES = CLUSTERS.reduce<number[]>(
   (sums, cluster) => [...sums, sums[sums.length - 1] + cluster.items.length],
@@ -115,6 +117,7 @@ function useProgressiveMount(total: number, start: boolean) {
 
 function App() {
   const [canvas, setCanvas] = useState<Stage | null>(null);
+  const [agents, setAgents] = useState<Agents | null>(null);
   const [gpucanvas, setGpucanvas] = useState<GpuCanvasInstance | null>(null);
   const [dark, setDark] = useState(readTheme);
   const [results, setResults] = useState(loadResults);
@@ -168,13 +171,26 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!canvas || mountMs === null) return;
+    if (!canvas || AGENTS <= 0) return;
+    const started = startAgents(canvas, AGENTS, INTRO);
+    setAgents(started);
+    return () => started.stop();
+  }, [canvas]);
+
+  useEffect(() => {
+    if (!canvas || mountMs === null || (AGENTS > 0 && !agents)) return;
     let cancelled = false;
     const { clientWidth: w, clientHeight: h } = canvas.surface;
-    const reveal =
-      MODE !== 'gpu' && !cameraTouched
-        ? flyTo(canvas, fitCamera(BOUNDS, w, h, 96))
-        : Promise.resolve();
+    // Once the intro's screens are built, the camera pulls out as the rest fill in.
+    const pullOut = INTRO || MODE !== 'gpu';
+    const reveal = (agents?.introDone ?? Promise.resolve()).then(() => {
+      if (cancelled) return;
+      // The bench waits for the wave: the DOM canvas takes a while to settle after it.
+      return Promise.all([
+        agents?.release(1600),
+        pullOut && !cameraTouched ? flyTo(canvas, fitCamera(BOUNDS, w, h, 96), 2400) : null,
+      ]);
+    });
     reveal.then(() => {
       if (cancelled) return;
       window.mountMs = mountMs;
@@ -183,14 +199,9 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [canvas, mountMs]);
+  }, [canvas, mountMs, agents]);
 
   useEffect(() => (canvas ? bindMarquee(canvas) : undefined), [canvas]);
-
-  useEffect(
-    () => (canvas && mountMs !== null && AGENTS > 0 ? startAgents(canvas, AGENTS) : undefined),
-    [canvas, mountMs],
-  );
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;
@@ -217,7 +228,8 @@ function App() {
           // getBoundingClientRect, which a far zoomed-out CSS scale skews into an endless
           // re-render.
           const { clientWidth: w, clientHeight: h } = instance.surface;
-          instance.setCamera(fitCamera(MODE === 'gpu' ? BOUNDS : CLUSTERS[0].bounds, w, h, 96));
+          const first = INTRO ?? (MODE === 'gpu' ? BOUNDS : CLUSTERS[0].bounds);
+          instance.setCamera(fitCamera(first, w, h, 96));
           setGpucanvas(instance);
           setCanvas(instance);
         }}

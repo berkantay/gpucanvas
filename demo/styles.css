@@ -194,16 +194,32 @@ body {
   }
 }
 
-/* Agents build a screen piece by piece: each piece fades and slides into place. */
+/* Agents build a screen block by block: text types in line by line, pictures come into focus from
+   flat grey, everything else pops in. */
 .agent-piece {
   transition:
     opacity 260ms ease-out,
-    translate 260ms ease-out;
+    scale 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    clip-path 420ms steps(4, jump-start),
+    filter 700ms ease-out;
 }
-.agent-hidden {
+.agent-hidden.agent-block {
   opacity: 0;
-  translate: 0 10px;
+  scale: 0.96;
+}
+.agent-hidden.agent-text {
+  clip-path: inset(0 0 100% 0);
+}
+.agent-hidden.agent-image {
+  filter: contrast(0) blur(6px);
 }
 .agent-building {
   box-shadow: 0 0 0 3px var(--agent);
+}
+/* On load, screens stay blank until an agent builds them or the wave reaches them. */
+.agents-intro .brand > * {
+  transition: opacity 400ms ease-out;
+}
+.agents-intro .brand:not(.agent-built) > * {
+  opacity: 0;
 }
