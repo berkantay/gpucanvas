@@ -193,3 +193,17 @@ body {
     transform: translateY(-3px);
   }
 }
+
+/* Agents build a screen piece by piece: each piece fades and slides into place. */
+.agent-piece {
+  transition:
+    opacity 260ms ease-out,
+    translate 260ms ease-out;
+}
+.agent-hidden {
+  opacity: 0;
+  translate: 0 10px;
+}
+.agent-building {
+  box-shadow: 0 0 0 3px var(--agent);
+}

@@ -7,6 +7,7 @@ import { fitCamera, supportsGpuCanvas, type GpuCanvas as GpuCanvasInstance } fro
 import { GpuCanvas } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
+import { startAgents } from './agents';
 import { bindMarquee } from './marquee';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
@@ -18,6 +19,8 @@ const MODE = requested === 'gpu' && !gpuSupported ? 'dom' : requested;
 const NODES = Number(params.get('n')) || 5_000;
 /** `?hud=0` leaves only the canvas on screen, for recording footage. */
 const HUD = params.get('hud') !== '0';
+/** `?agents=0` turns off the cursors building screens. */
+const AGENTS = Number(params.get('agents') ?? 4);
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
 /** Where the bench's close-ups land: clusters of product screens, not walls of notes. */
 /** Where the bench works: clusters of product screens, not walls of notes. */
@@ -183,6 +186,11 @@ function App() {
   }, [canvas, mountMs]);
 
   useEffect(() => (canvas ? bindMarquee(canvas) : undefined), [canvas]);
+
+  useEffect(
+    () => (canvas && mountMs !== null && AGENTS > 0 ? startAgents(canvas, AGENTS) : undefined),
+    [canvas, mountMs],
+  );
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;
