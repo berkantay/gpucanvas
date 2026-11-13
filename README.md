@@ -29,6 +29,9 @@ The same session on both sides: 5,000 live React screens, the same camera path, 
 Marks from an agent, a wipe and a dissolve, the glass lens and shockwaves, all on live
 components. Recorded in Chrome from the demo.
 
+How it works, with the benchmarks and what Chrome's HTML-in-Canvas does differently from the
+explainer: [gpucanvas: 5,000 Live React Screens on a WebGPU Infinite Canvas](https://berkant.me/blog/gpucanvas-webgpu-infinite-canvas).
+
 ## Try it
 
 Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or
@@ -36,6 +39,12 @@ later. Thirty agent cursors build the first view, then the camera pulls out to a
 
 - Click a screen to select it, double-click to go deeper, drag to move it. Double-click a text
   field to type in it, or switch the toolbar to Interact and use the screens like a normal page.
+- In Interact, every button does something. Continue, Sign in and Back move the camera to the
+  next screen like a clickable prototype, Notifications and More open panels, Export saves a
+  CSV, Send adds the message and Share copies the link.
+- The toolbar holds every setting: renderer, number of screens, Edit or Interact, what a click
+  selects, the shader effect, the agent cursors and the theme. They apply live, and the URL
+  remembers them.
 - Pick a shader effect in the toolbar, or open one directly:
   [glass](https://berkantay.github.io/gpucanvas/?effect=glass),
   [shockwave](https://berkantay.github.io/gpucanvas/?effect=shockwave) (click anywhere),
@@ -43,7 +52,8 @@ later. Thirty agent cursors build the first view, then the camera pulls out to a
   [glitch](https://berkantay.github.io/gpucanvas/?effect=glitch).
 - Select a screen and press `D` to dissolve it, `W` to wipe it, or `S` to save it as a PNG.
 - In the console, `agentView.describe()` lists what is in view, and `marks` draws on it.
-- Press `b` to run the benchmark tour.
+- Press `b` to run the benchmark tour, `f` to fit every screen in view, `t` to switch the theme.
+- On a phone: pinch to zoom, drag to pan, tap to use a screen.
 
 The GPU path needs HTML-in-Canvas, which is behind a flag:
 
@@ -51,7 +61,10 @@ The GPU path needs HTML-in-Canvas, which is behind a flag:
 2. Set it to Enabled and relaunch Chrome
 3. Reload the demo
 
-Without the flag the demo runs the DOM fallback with 1,000 screens and says so.
+Without the flag the demo runs the DOM fallback with 1,000 screens and says so. Phones start
+smaller so the tab is not killed for memory: 1,000 screens on the GPU path (Chrome on Android with
+the flag) and 250 as DOM. iPhone and iPad browsers have no HTML-in-Canvas yet, so they run the DOM
+version and say so.
 
 Status: early (0.4). The API can still change.
 
@@ -327,7 +340,9 @@ to npm from GitHub Actions, with provenance, through npm trusted publishing. See
    under 200 screen pixels refreshes at most four times a second.
 7. **Input.** Only the page under the pointer is registered for hit testing, and a CSS transform
    puts the node under the pointer exactly where the GPU drew it. Clicks, typing, selection and
-   hover all go to the real element. A focused node keeps its page live.
+   hover all go to the real element. A focused node keeps its page live. Touch has no hover, so a
+   tap makes the node under the finger live and hands the click to the element it landed on. A
+   two-finger pinch zooms and pans the camera wherever the fingers land.
 
 ## Measured (M-series Mac, Chrome 157, 1600 x 900 window, DPR 1)
 
