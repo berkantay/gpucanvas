@@ -16,6 +16,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import {
   RiAppleFill,
@@ -131,12 +132,16 @@ export const flow = (step: 1 | -1) => (event: MouseEvent<HTMLElement>) =>
 export const toast = (from: EventTarget, text: string) =>
   from.dispatchEvent(new CustomEvent(TOAST_EVENT, { bubbles: true, detail: text }));
 
-/** Shows the toasts raised inside it along its bottom edge. It fills its parent. */
-export function ToastHost({ children }: { children: ReactNode }) {
+/**
+ * Toasts for the element `ref` goes on: the ones raised inside it show along its bottom edge,
+ * which needs it positioned. A hook rather than a wrapper, so pickers see no extra component.
+ */
+export function useToasts(): [RefObject<HTMLDivElement | null>, ReactNode] {
   const root = useRef<HTMLDivElement>(null);
   const [text, setText] = useState<{ value: string; id: number } | null>(null);
   useEffect(() => {
-    const host = root.current!;
+    const host = root.current;
+    if (!host) return;
     const show = (event: Event) => {
       event.stopPropagation();
       setText({ value: (event as CustomEvent<string>).detail, id: performance.now() });
@@ -149,22 +154,18 @@ export function ToastHost({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => setText(null), 2200);
     return () => clearTimeout(timer);
   }, [text]);
-  return (
-    <div ref={root} className="relative h-full">
-      {children}
-      {text && (
-        <div
-          role="status"
-          className="pointer-events-none absolute inset-x-0 bottom-8 z-40 flex justify-center"
-        >
-          <span className="flex items-center gap-2 rounded-full bg-text-primary px-4 py-2.5 text-body-2-medium text-background-primary-default shadow-lg">
-            <RiCheckboxCircleFill className="size-[18px]" />
-            {text.value}
-          </span>
-        </div>
-      )}
+  const view = text && (
+    <div
+      role="status"
+      className="pointer-events-none absolute inset-x-0 bottom-8 z-40 flex justify-center"
+    >
+      <span className="flex items-center gap-2 rounded-full bg-text-primary px-4 py-2.5 text-body-2-medium text-background-primary-default shadow-lg">
+        <RiCheckboxCircleFill className="size-[18px]" />
+        {text.value}
+      </span>
     </div>
   );
+  return [root, view];
 }
 
 /**

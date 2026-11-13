@@ -62,7 +62,7 @@ import {
   Textarea,
   Thinking,
   toast,
-  ToastHost,
+  useToasts,
   type Day,
 } from './ui';
 import { PEOPLE, type Entry, type Product } from './products';
@@ -1957,6 +1957,7 @@ function Frame({
   phone?: boolean;
   children: ReactNode;
 }) {
+  const [toastRoot, toasts] = useToasts();
   return (
     <div className="flex h-full flex-col" style={{ padding: `0 ${BLEED}px ${BLEED}px` }}>
       <span className="h-[30px] truncate text-body-2-medium text-text-tertiary">{name}</span>
@@ -1967,7 +1968,10 @@ function Frame({
         )}
         style={{ '--brand': product.brand } as CSSProperties}
       >
-        <ToastHost>{children}</ToastHost>
+        <div ref={toastRoot} className="relative h-full">
+          {children}
+          {toasts}
+        </div>
       </div>
     </div>
   );
