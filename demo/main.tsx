@@ -29,15 +29,16 @@ const HUD = params.get('hud') !== '0';
 /** `?agents=0` turns off the cursors building screens. */
 const AGENTS = Number(params.get('agents') ?? 30);
 /**
- * What a click selects: `?pick=node` (a whole screen), `element` or `component`; a double-click
- * goes one level deeper. `?edit=1` is the edit mode: every click selects, drags move, handles resize.
+ * What a click selects: React components (default), `?pick=element` or `?pick=node` (whole
+ * screens); a double-click goes one level deeper. The edit mode is on: every click selects, drags
+ * move, handles resize. `?edit=0` leaves clicks to the components and selects with shift.
  */
 const PICK = params.get('pick');
-const EDIT = params.get('edit') === '1';
+const EDIT = params.get('edit') !== '0';
 const EDITOR: EditorOptions =
-  PICK === 'component'
-    ? { pick: pickComponents, label: labelComponent }
-    : { pick: PICK === 'element' ? 'element' : 'node' };
+  PICK === 'element' || PICK === 'node'
+    ? { pick: PICK }
+    : { pick: pickComponents, label: labelComponent };
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
 /** Where the bench works: clusters of product screens, not walls of notes. */
 const SHOWCASE = CLUSTERS.flatMap((cluster, id) =>
@@ -316,7 +317,7 @@ function App() {
           />
           <Meter canvas={canvas} mounted={mountedNodes} total={NODES} />
           <Results nodes={NODES} results={results} />
-          <Hints />
+          <Hints edit={EDIT} />
           {!gpuSupported && <FlagNotice />}
         </>
       )}

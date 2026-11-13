@@ -377,7 +377,7 @@ export function FlagNotice() {
   );
 }
 
-export function Hints() {
+export function Hints({ edit }: { edit: boolean }) {
   return (
     <div
       className={cx(
@@ -392,9 +392,23 @@ export function Hints() {
         <Kbd>⌘</Kbd>
         <Kbd>Scroll</Kbd> to zoom
       </span>
-      <span className="flex items-center gap-1.5">
-        <Kbd>Shift</Kbd> click or drag to select
-      </span>
+      {edit ? (
+        <>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Click</Kbd> to select
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Double-click</Kbd> to go deeper
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>Drag</Kbd> to move
+          </span>
+        </>
+      ) : (
+        <span className="flex items-center gap-1.5">
+          <Kbd>Shift</Kbd> click or drag to select
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <Kbd>F</Kbd> fit
       </span>

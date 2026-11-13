@@ -109,8 +109,9 @@ canvas.setHover(el); // a lighter outline; null clears
 canvas.screenToWorld(point); // surface pixels to world units, and worldToScreen back
 ```
 
-Colors are the `selectionColor` and `hoverColor` options. The demo takes `?pick=node`,
-`element` or `component`, and `?edit=1` for the edit mode.
+Colors are the `selectionColor` and `hoverColor` options. The demo picks React components in the edit mode;
+`?pick=element` or `?pick=node` picks elements or whole screens, and `?edit=0` leaves clicks to
+the components.
 
 ## Run the demo
 
