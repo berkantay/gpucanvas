@@ -112,7 +112,7 @@ const TOUR: Stop[] = [
     actions: [
       { into: 'Message', text: 'Can we ship the redesign Friday?' },
       { press: 'Send' },
-      { wait: 1400 },
+      { wait: 700 },
     ],
   },
   {
@@ -121,7 +121,7 @@ const TOUR: Stop[] = [
     screen: /^\w+ \/ Web \/ Dashboard$/,
     zoom: 1.1,
     route: 'across',
-    actions: [{ press: '12 months' }, { wait: 600 }, { press: '7 days' }, { wait: 600 }],
+    actions: [{ press: '12 months' }, { wait: 500 }, { press: '7 days' }, { wait: 500 }],
   },
   {
     // Out to all of them and back in, then a push to 500% on the last click.
@@ -196,7 +196,7 @@ function session(
     };
 
   // A first look at everything before the camera moves.
-  const steps: Step[] = [{ ms: 3000 }];
+  const steps: Step[] = [{ ms: 1200 }];
   let here: Rect | null = null;
   let lastCluster: BenchCluster | null = null;
   for (const stop of TOUR) {
@@ -214,43 +214,43 @@ function session(
     const { c, i } = candidates[0];
     const screen = c.items[i].rect;
     if (!here || stop.route === 'dive')
-      steps.push({ ms: 2800, to: frame(c.bounds), move: 'dive' }, { ms: 300 });
+      steps.push({ ms: 1500, to: frame(c.bounds), move: 'dive' }, { ms: 150 });
     else if (stop.route === 'overview')
       steps.push(
-        { ms: 2600, to: overview, move: 'overview' },
-        { ms: 600 },
-        { ms: 2800, to: frame(c.bounds), move: 'dive' },
+        { ms: 1400, to: overview, move: 'overview' },
+        { ms: 300 },
+        { ms: 1500, to: frame(c.bounds), move: 'dive' },
       );
     else {
       const from = center(here);
       const to = center(c.bounds);
       const across = Math.hypot(to.x - from.x, to.y - from.y) * ALTITUDE;
       steps.push(
-        { ms: 1800, to: centeredOn(from.x, from.y, ALTITUDE, w, h), move: 'climb' },
+        { ms: 900, to: centeredOn(from.x, from.y, ALTITUDE, w, h), move: 'climb' },
         {
-          ms: Math.min(2800, Math.max(1600, across * 1.6)),
+          ms: Math.min(1600, Math.max(900, across * 0.9)),
           to: centeredOn(to.x, to.y, ALTITUDE, w, h),
           move: 'across',
         },
-        { ms: 2200, to: frame(c.bounds), move: 'dive' },
+        { ms: 1200, to: frame(c.bounds), move: 'dive' },
       );
     }
-    steps.push({ ms: 1600, to: frame(screen, stop.zoom), move: 'screen' }, { ms: 400 });
+    steps.push({ ms: 900, to: frame(screen, stop.zoom), move: 'screen' }, { ms: 200 });
     for (const action of stop.actions) {
       if ('into' in action) {
         const input = control(c, i, action.into);
         if (!(input instanceof HTMLInputElement)) continue;
         steps.push({
-          ms: 300 + action.text.length * 60,
+          ms: 200 + action.text.length * 35,
           type: {
             input,
             text: action.text,
             at: () => toScreen(worldPoint(c, i, input)),
           },
         });
-        steps.push({ ms: 500 });
+        steps.push({ ms: 250 });
       } else if ('wait' in action) steps.push({ ms: action.wait });
-      else steps.push({ ms: 1000, act: press(c, i, action.press, action.times) });
+      else steps.push({ ms: 550, act: press(c, i, action.press, action.times) });
     }
     here = c.bounds;
     lastCluster = c;
@@ -261,8 +261,8 @@ function session(
       if (last) {
         const p = worldPoint(c, i, last);
         steps.push(
-          { ms: 1800, to: centeredOn(p.x, p.y + 40, 5, w, h), move: 'push' },
-          { ms: 2000 },
+          { ms: 1000, to: centeredOn(p.x, p.y + 40, 5, w, h), move: 'push' },
+          { ms: 1000 },
         );
       }
     }
@@ -278,10 +278,10 @@ function session(
       .slice(0, 3)
       .sort((a, b) => a.item.rect.x - b.item.rect.x);
     const picked: HTMLElement[] = [];
-    steps.push({ ms: 2200, to: frame(c.bounds), move: 'pick' }, { ms: 500 });
+    steps.push({ ms: 1200, to: frame(c.bounds), move: 'pick' }, { ms: 250 });
     for (const { item, i } of picks) {
       steps.push({
-        ms: 900,
+        ms: 500,
         act: () => {
           const element = node(c, i);
           if (!element) return null;
@@ -291,9 +291,9 @@ function session(
         },
       });
     }
-    steps.push({ ms: 900 });
+    steps.push({ ms: 500 });
   }
-  steps.push({ ms: 3400, to: overview, move: 'out' }, { ms: 1000 });
+  steps.push({ ms: 1800, to: overview, move: 'out' }, { ms: 400 });
   // Out at everything, a selection box sweeps across a third of the canvas: every screen it
   // touches is outlined as it grows.
   const from = { x: w * 0.16, y: h * 0.14 };
@@ -301,7 +301,7 @@ function session(
   let count = 0;
   steps.push(
     {
-      ms: 2600,
+      ms: 1500,
       move: 'select',
       each: (t) => {
         count = marquee.update(from, {
@@ -311,7 +311,7 @@ function session(
       },
     },
     {
-      ms: 1400,
+      ms: 900,
       act: () => {
         marquee.hide();
         return { t: 0, kind: 'select', ...to, text: String(count) };
@@ -323,7 +323,7 @@ function session(
 }
 
 /** The session's length in ms, for progress bars; the tour runs about this long. */
-export const BENCH_DURATION_MS = 55_000;
+export const BENCH_DURATION_MS = 30_000;
 
 /** Runs the bench session on `canvas` and measures every frame. */
 export function runBench(
@@ -349,8 +349,13 @@ export function runBench(
       last = now;
       const elapsed = Math.max(0, now - start);
       while (index < steps.length - 1 && (index < 0 || now - stepStart >= steps[index].ms)) {
-        if (index >= 0) stepStart += steps[index].ms;
-        else stepStart = start;
+        if (index >= 0) {
+          // A slow frame can skip a step's end: land it before the next one starts.
+          const done = steps[index];
+          if (done.to) canvas.setCamera(done.to);
+          done.each?.(1);
+          stepStart += done.ms;
+        } else stepStart = start;
         index++;
         from = canvas.getCamera();
         const move = steps[index].move;
