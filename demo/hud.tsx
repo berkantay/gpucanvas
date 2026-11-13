@@ -424,7 +424,7 @@ export function Hints({ edit }: { edit: boolean }) {
             <Kbd>Click</Kbd> to select
           </span>
           <span className="flex items-center gap-1.5">
-            <Kbd>Double-click</Kbd> to go deeper
+            <Kbd>Double-click</Kbd> to go deeper or type
           </span>
           <span className="flex items-center gap-1.5">
             <Kbd>Drag</Kbd> to move

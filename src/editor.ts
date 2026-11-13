@@ -31,8 +31,9 @@ export interface EditorOptions {
    * shift-cmd-click (shift-ctrl-click) adds or removes, shift-drag draws a selection box.
    * `'click'`: an edit mode. Every click selects, shift-click adds or removes, drags move, and
    * shift-drag on the background draws a selection box.
-   * Either way, a double-click goes one layer deeper, and a drag on the open area of the layer
-   * you are inside draws a box over its children.
+   * In the edit mode, a double-click on a text field starts typing in it, and Escape or a click
+   * elsewhere ends it. Either way, a double-click goes one layer deeper, and a drag on the open
+   * area of the layer you are inside draws a box over its children.
    */
   trigger?: 'shift-click' | 'click';
   /** Outlines what a click would select. With `'shift-click'`, only while shift is held. Default true. */
@@ -195,6 +196,8 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
   let pointer: Point | null = null;
   let shift = false;
   let swallowClick = false;
+  /** The press is on the field being typed in, but the browser routed it elsewhere. */
+  let keepFocus = false;
 
   const commit = (next: Layer[], nextScopes: Layer[] = scopes) => {
     selection = next.filter((layer, i) => next.findIndex((other) => sameLayer(layer, other)) === i);
@@ -214,6 +217,17 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
     return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   };
   const chainAt = (point: Point) => layers.chainAt(canvas.screenToWorld(point));
+  /** The text field, select or contenteditable under a surface point. */
+  const fieldAt = (point: Point) => {
+    const element = canvas.getElementAt(canvas.screenToWorld(point));
+    const field = element?.closest('input, textarea, select, [contenteditable]') ?? null;
+    return isEditable(field) ? (field as HTMLElement) : null;
+  };
+  /** The field being typed in, when it is on this canvas. */
+  const typingIn = () => {
+    const active = document.activeElement;
+    return isEditable(active) && canvas.getNodeOf(active!) ? (active as HTMLElement) : null;
+  };
   /** What a click lands on: inside the deepest scope on the chain, one level down from it. */
   const targetIn = (chain: Layer[]): Target | null => {
     if (!chain.length) return null;
@@ -400,9 +414,18 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
     swallowClick = false;
     if (event.button !== 0) return;
     const point = at(event);
+    // Presses inside the field being typed in reach it: the caret, text selection.
+    const field = typingIn();
+    keepFocus = false;
+    if (field && field.contains(fieldAt(point))) {
+      keepFocus = !field.contains(event.target as globalThis.Node);
+      return;
+    }
     const take = () => {
-      // Nothing under the pointer sees this press, nor the click it ends in.
+      // Nothing under the pointer sees this press, nor the click it ends in. The press that
+      // would have moved focus out of a field ends typing there instead.
       event.stopPropagation();
+      field?.blur();
       swallowClick = true;
       surface.setPointerCapture(event.pointerId);
     };
@@ -481,8 +504,24 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
     if (!selecting(event.shiftKey)) return;
     event.preventDefault();
     event.stopPropagation();
+    const point = at(event);
+    // In the edit mode, a double-click on a field starts typing in it, as on text in a design
+    // tool. Shift-click mode leaves fields to plain clicks.
+    const field = trigger === 'click' ? fieldAt(point) : null;
+    if (field) {
+      if (selection.length) commit([], []);
+      field.focus();
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        try {
+          field.setSelectionRange(field.value.length, field.value.length);
+        } catch {
+          // Inputs like email and number have no caret to place.
+        }
+      }
+      return;
+    }
     // One level deeper than the selection, under the pointer.
-    const chain = chainAt(at(event));
+    const chain = chainAt(point);
     let depth = -1;
     chain.forEach((layer, i) => {
       if (layerIn(layer, selection)) depth = i;
@@ -495,6 +534,11 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
   };
   // A press the editor takes would otherwise focus, or select text in, the component under it.
   const onMouseDown = (event: MouseEvent) => {
+    if (keepFocus) {
+      keepFocus = false;
+      event.preventDefault();
+      return;
+    }
     if (!swallowClick) return;
     event.preventDefault();
     event.stopPropagation();
@@ -514,7 +558,12 @@ export function bindEditor(canvas: GpuCanvas, options: EditorOptions = {}): Edit
       shift = event.type === 'keydown';
       return updateHover();
     }
-    if (event.type !== 'keydown' || isEditable(document.activeElement)) return;
+    if (event.type !== 'keydown') return;
+    if (isEditable(document.activeElement)) {
+      // Escape ends typing in a field the edit mode opened.
+      if (event.key === 'Escape' && trigger === 'click') typingIn()?.blur();
+      return;
+    }
     if (event.key === 'Escape') {
       if (gesture?.kind === 'move' || gesture?.kind === 'resize') {
         emit('cancel');

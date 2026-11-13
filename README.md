@@ -34,7 +34,8 @@ components. Recorded in Chrome from the demo.
 Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or
 later. Thirty agent cursors build the first view, then the camera pulls out to all 5,000 screens.
 
-- Click a screen to select it, double-click to go deeper, drag to move it.
+- Click a screen to select it, double-click to go deeper, drag to move it. Double-click a text
+  field to type in it.
 - Pick a shader effect in the toolbar, or open one directly:
   [glass](https://berkantay.github.io/gpucanvas/?effect=glass),
   [shockwave](https://berkantay.github.io/gpucanvas/?effect=shockwave) (click anywhere),
@@ -100,10 +101,10 @@ so every double-click visibly changes something.
 
 | Input              | Does                                                                         |
 | ------------------ | ---------------------------------------------------------------------------- |
-| Double-click       | One layer deeper                                                             |
+| Double-click       | One layer deeper; on a text field, starts typing in it                       |
 | Enter, Shift+Enter | First child, parent                                                          |
 | Tab, Shift+Tab     | Next and previous sibling                                                    |
-| Escape             | Cancels a drag, then goes up a layer, then clears                            |
+| Escape             | Ends typing, cancels a drag, then goes up a layer, then clears               |
 | Drag               | Moves, snapping to the edges and centers of neighbors (Shift locks the axis) |
 | Handles            | Resize (Shift on a corner keeps the ratio)                                   |
 | Drag on open space | A box that selects the layers it touches, inside the layer you are in        |
