@@ -233,6 +233,7 @@ function session(
   // A first look at everything before the camera moves.
   const steps: Step[] = [{ ms: 3000 }];
   let here: Rect | null = null;
+  let lastCluster: BenchCluster | null = null;
   for (const stop of TOUR) {
     const point = {
       x: bounds.x + stop.at[0] * bounds.width,
@@ -287,6 +288,7 @@ function session(
       else steps.push({ ms: 1000, act: press(c, i, action.press, action.times) });
     }
     here = c.bounds;
+    lastCluster = c;
     // The tour ends close up: a push to 500% on what was just changed.
     const lastAction = stop.actions[stop.actions.length - 1];
     if (stop === TOUR[TOUR.length - 1] && 'press' in lastAction) {
@@ -299,6 +301,32 @@ function session(
         );
       }
     }
+  }
+  // Back to the whole cluster: three screens are shift-clicked into a selection, one by one.
+  if (lastCluster) {
+    const c = lastCluster;
+    const area = (rect: Rect) => rect.width * rect.height;
+    const picks = c.items
+      .map((item, i) => ({ item, i }))
+      .filter(({ item }) => item.name)
+      .sort((a, b) => area(b.item.rect) - area(a.item.rect))
+      .slice(0, 3)
+      .sort((a, b) => a.item.rect.x - b.item.rect.x);
+    const picked: HTMLElement[] = [];
+    steps.push({ ms: 2200, to: frame(c.bounds), move: 'pick' }, { ms: 500 });
+    for (const { item, i } of picks) {
+      steps.push({
+        ms: 900,
+        act: () => {
+          const element = node(c, i);
+          if (!element) return null;
+          picked.push(element);
+          canvas.setSelection(picked);
+          return { t: 0, kind: 'click', ...toScreen(center(item.rect)), text: 'select' };
+        },
+      });
+    }
+    steps.push({ ms: 900 });
   }
   steps.push({ ms: 3400, to: overview, move: 'out' }, { ms: 1000 });
   // Out at everything, a selection box sweeps across a third of the canvas: every screen it
@@ -330,7 +358,7 @@ function session(
 }
 
 /** The session's length in ms, for progress bars; the tour runs about this long. */
-export const BENCH_DURATION_MS = 99_000;
+export const BENCH_DURATION_MS = 105_000;
 
 /** Runs the bench session on `canvas` and measures every frame. */
 export function runBench(
