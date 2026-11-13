@@ -7,6 +7,7 @@ import { fitCamera, supportsGpuCanvas, type GpuCanvas as GpuCanvasInstance } fro
 import { GpuCanvas } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
+import { bindMarquee } from './marquee';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
 
@@ -180,6 +181,8 @@ function App() {
       cancelled = true;
     };
   }, [canvas, mountMs]);
+
+  useEffect(() => (canvas ? bindMarquee(canvas) : undefined), [canvas]);
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;

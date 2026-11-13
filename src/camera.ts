@@ -89,7 +89,8 @@ export function bindCameraInput(
   let drag: { pointerId: number; x: number; y: number } | null = null;
   const onPointerDown = (event: PointerEvent) => {
     // Only drags that start on the canvas background pan; nodes keep their own pointer events.
-    if (event.button !== 0 && event.button !== 1) return;
+    // Shift-drags are left to the app, for a selection box.
+    if ((event.button !== 0 && event.button !== 1) || event.shiftKey) return;
     if (
       event.target !== element &&
       !(event.target as Element).hasAttribute?.('data-gpucanvas-surface')

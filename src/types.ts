@@ -7,6 +7,8 @@ export interface GpuCanvasOptions {
   mode?: 'auto' | GpuCanvasMode;
   /** Canvas background, any CSS color. */
   background?: string;
+  /** Outline of selected nodes, any CSS color. Default `#4f8cff`. */
+  selectionColor?: string;
   camera?: Camera;
   /** Side of each atlas layer in texels. Default 4096, capped by the device. */
   atlasSize?: number;
@@ -65,6 +67,10 @@ export interface GpuCanvas {
   removeNode(element: HTMLElement): void;
   /** Where `element` sits on the canvas, in world units, or null when it is not a node. */
   getNodeRect(element: HTMLElement): Rect | null;
+  /** Nodes that overlap `rect` (world units), such as the ones under a selection box. */
+  getNodesIn(rect: Rect): HTMLElement[];
+  /** Outlines these nodes as selected, replacing the previous selection. Pass `[]` to clear. */
+  setSelection(elements: Iterable<HTMLElement>): void;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
   /**
@@ -81,3 +87,6 @@ export interface GpuCanvas {
 }
 
 export const DEFAULT_CAMERA: Camera = { x: 0, y: 0, zoom: 1 };
+export const DEFAULT_SELECTION_COLOR = '#4f8cff';
+/** Width of the selection outline, in CSS pixels at any zoom. */
+export const SELECTION_WIDTH = 2;

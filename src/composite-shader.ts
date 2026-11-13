@@ -1,5 +1,6 @@
 /**
  * One instanced quad per visible node: its atlas snapshot, or a placeholder until one exists.
+ * Selected nodes get one more quad on top, a ring just outside their edge.
  *
  * Snapshots are kept when zooming out, so a quad often covers fewer pixels than its texels.
  * Plain bilinear filtering would then skip texels and shimmer while the camera moves, so the
@@ -13,8 +14,9 @@ struct View {
   zoom: f32,
   dpr: f32,
   atlasSize: f32,
-  _pad: f32,
+  outline: f32,       // selection ring width, CSS pixels
   placeholder: vec4f, // premultiplied color for nodes without a snapshot
+  selection: vec4f,   // premultiplied selection ring color
 }
 
 @group(0) @binding(0) var<uniform> view: View;
@@ -24,7 +26,7 @@ struct View {
 struct Instance {
   @location(0) rect: vec4f, // world x, y, width, height
   @location(1) uv: vec4f,   // atlas texels x0, y0, x1, y1
-  @location(2) info: vec4f, // layer, placeholder flag
+  @location(2) info: vec4f, // layer, kind: 0 snapshot, 1 placeholder, 2 selection ring
 }
 
 struct Varyings {
@@ -37,17 +39,28 @@ struct Varyings {
 @vertex
 fn vs(@builtin(vertex_index) vertex: u32, instance: Instance) -> Varyings {
   let corner = vec2f(f32(vertex & 1u), f32(vertex >> 1u));
+  // A selection ring's quad reaches past the node by the ring's width.
+  let ring = instance.info.y > 1.5;
+  let grow = select(0.0, view.outline / view.zoom, ring);
+  let start = instance.rect.xy - grow;
+  let end = instance.rect.xy + instance.rect.zw + grow;
   // Snap edges to device pixels so a snapshot drawn at its raster scale stays crisp.
   let scale = view.zoom * view.dpr;
-  let topLeft = round((instance.rect.xy - view.origin) * scale) / view.dpr;
-  let bottomRight = round((instance.rect.xy + instance.rect.zw - view.origin) * scale) / view.dpr;
+  let topLeft = round((start - view.origin) * scale) / view.dpr;
+  let bottomRight = round((end - view.origin) * scale) / view.dpr;
   let point = mix(topLeft, bottomRight, corner);
   var out: Varyings;
   out.position = vec4f(point.x / view.size.x * 2.0 - 1.0, 1.0 - point.y / view.size.y * 2.0, 0.0, 1.0);
-  out.texel = mix(instance.uv.xy, instance.uv.zw, corner);
-  // Half a texel inside the node's rectangle: the outermost sample center that cannot blend
-  // with whatever sits next to it in the atlas.
-  out.bounds = vec4f(instance.uv.xy + 0.5, instance.uv.zw - 0.5);
+  if (ring) {
+    // World units from the node's top left, and the node's own edges.
+    out.texel = mix(vec2f(-grow), instance.rect.zw + grow, corner);
+    out.bounds = vec4f(0.0, 0.0, instance.rect.zw);
+  } else {
+    out.texel = mix(instance.uv.xy, instance.uv.zw, corner);
+    // Half a texel inside the node's rectangle: the outermost sample center that cannot blend
+    // with whatever sits next to it in the atlas.
+    out.bounds = vec4f(instance.uv.xy + 0.5, instance.uv.zw - 0.5);
+  }
   out.info = instance.info.xy;
   return out;
 }
@@ -57,6 +70,11 @@ fn fs(in: Varyings) -> @location(0) vec4f {
   // Derivatives first: WGSL only allows them in uniform control flow.
   let dx = dpdx(in.texel);
   let dy = dpdy(in.texel);
+  if (in.info.y > 1.5) {
+    // The ring covers what lies outside the node; the node itself shows through.
+    let outside = max(in.bounds.xy - in.texel, in.texel - in.bounds.zw);
+    return select(vec4f(0.0), view.selection, max(outside.x, outside.y) > 0.0);
+  }
   if (in.info.y > 0.5) {
     return view.placeholder;
   }

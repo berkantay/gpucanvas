@@ -29,6 +29,18 @@ HTML-in-Canvas are available (Chrome 157+), nodes are snapshotted into a GPU atl
 one instanced draw call. Everywhere else it falls back to a CSS-transformed container with the
 same API.
 
+## Selection
+
+Selected nodes get an outline drawn by the GPU, 2 CSS pixels wide at any zoom.
+
+```ts
+const hits = canvas.getNodesIn({ x, y, width, height }); // world units, such as a selection box
+canvas.setSelection(hits); // replaces the selection; [] clears it
+```
+
+The color is the `selectionColor` option. Shift-drags on the background don't pan, so an app
+can use them for a selection box, as the demo does.
+
 ## Run the demo
 
 ```sh

@@ -1,4 +1,5 @@
 import { fitCamera, type Camera, type Rect } from '../src/index';
+import { createMarquee } from './marquee';
 import type { Mode, Stage } from './stage';
 
 export interface BenchResult {
@@ -19,7 +20,7 @@ export interface BenchResult {
 
 export interface BenchEvent {
   t: number;
-  kind: 'click' | 'type' | 'move';
+  kind: 'click' | 'type' | 'move' | 'select';
   x: number;
   y: number;
   text?: string;
@@ -65,6 +66,8 @@ interface Step {
   move?: string;
   act?: () => BenchEvent | null;
   type?: { input: HTMLInputElement; text: string; at: () => { x: number; y: number } };
+  /** Runs every frame of the step with its eased progress, 0 to 1. */
+  each?: (t: number) => void;
 }
 
 const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
@@ -171,7 +174,12 @@ const ALTITUDE = 0.06;
  * The session every engine runs. Each action really happens in the components: the same DOM
  * events reach them in both engines, so the GPU has to redraw what changed.
  */
-function session(canvas: Stage, bounds: Rect, clusters: BenchCluster[]): Step[] {
+function session(
+  canvas: Stage,
+  bounds: Rect,
+  clusters: BenchCluster[],
+  marquee: ReturnType<typeof createMarquee>,
+): Step[] {
   const w = canvas.surface.clientWidth;
   const h = canvas.surface.clientHeight;
   const overview = fitCamera(bounds, w, h);
@@ -292,12 +300,37 @@ function session(canvas: Stage, bounds: Rect, clusters: BenchCluster[]): Step[] 
       }
     }
   }
-  steps.push({ ms: 3400, to: overview, move: 'out' }, { ms: 2400 });
+  steps.push({ ms: 3400, to: overview, move: 'out' }, { ms: 1000 });
+  // Out at everything, a selection box sweeps across a third of the canvas: every screen it
+  // touches is outlined as it grows.
+  const from = { x: w * 0.16, y: h * 0.14 };
+  const to = { x: w * 0.6, y: h * 0.84 };
+  let count = 0;
+  steps.push(
+    {
+      ms: 2600,
+      move: 'select',
+      each: (t) => {
+        count = marquee.update(from, {
+          x: from.x + (to.x - from.x) * t,
+          y: from.y + (to.y - from.y) * t,
+        });
+      },
+    },
+    {
+      ms: 1400,
+      act: () => {
+        marquee.hide();
+        return { t: 0, kind: 'select', ...to, text: String(count) };
+      },
+    },
+    { ms: 0, move: 'end' },
+  );
   return steps;
 }
 
 /** The session's length in ms, for progress bars; the tour runs about this long. */
-export const BENCH_DURATION_MS = 94_000;
+export const BENCH_DURATION_MS = 99_000;
 
 /** Runs the bench session on `canvas` and measures every frame. */
 export function runBench(
@@ -307,7 +340,8 @@ export function runBench(
   mountMs: number,
   onProgress?: (t: number) => void,
 ): Promise<BenchResult> {
-  const steps = session(canvas, bounds, clusters);
+  const marquee = createMarquee(canvas);
+  const steps = session(canvas, bounds, clusters, marquee);
   const total = steps.reduce((sum, step) => sum + step.ms, 0);
   return new Promise((resolve) => {
     const deltas: number[] = [];
@@ -337,8 +371,9 @@ export function runBench(
         }
       }
       const step = steps[index];
-      const t = Math.min(1, (now - stepStart) / step.ms);
+      const t = step.ms > 0 ? Math.min(1, (now - stepStart) / step.ms) : 1;
       if (step.to) canvas.setCamera(lerpCamera(from, step.to, ease(t)));
+      step.each?.(ease(t));
       if (step.type) {
         const text = step.type.text.slice(0, Math.ceil(t * step.type.text.length));
         if (step.type.input.value !== text) {
@@ -349,6 +384,8 @@ export function runBench(
       }
       onProgress?.(Math.min(1, elapsed / total));
       if (elapsed < total) return requestAnimationFrame(tick);
+      marquee.remove();
+      canvas.setSelection([]);
       const sorted = deltas.slice(1).sort((a, b) => a - b);
       const sum = sorted.reduce((acc, value) => acc + value, 0);
       resolve({

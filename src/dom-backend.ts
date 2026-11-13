@@ -7,7 +7,13 @@ import {
   type Rect,
 } from './camera';
 import { applyNodeBase, applyNodeSize, boundsOf } from './node-style';
-import { DEFAULT_CAMERA, type GpuCanvas, type GpuCanvasOptions } from './types';
+import {
+  DEFAULT_CAMERA,
+  DEFAULT_SELECTION_COLOR,
+  SELECTION_WIDTH,
+  type GpuCanvas,
+  type GpuCanvasOptions,
+} from './types';
 
 /**
  * The fallback, and the way most infinite canvases work today: every node is absolutely
@@ -37,12 +43,18 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
   host.append(surface);
 
   const nodes = new Map<HTMLElement, Rect>();
+  let selected = new Set<HTMLElement>();
+  // Outlines live inside the zoomed world, so their width divides the zoom back out.
+  const outline = `calc(${SELECTION_WIDTH}px / var(--gpucanvas-zoom)) solid ${
+    options.selectionColor ?? DEFAULT_SELECTION_COLOR
+  }`;
   let camera = options.camera ?? DEFAULT_CAMERA;
   let frameMs = 0;
 
   const apply = () => {
     const start = performance.now();
     world.style.transform = `scale(${camera.zoom}) translate(${-camera.x}px, ${-camera.y}px)`;
+    world.style.setProperty('--gpucanvas-zoom', String(camera.zoom));
     frameMs = performance.now() - start;
   };
   const setCamera = (next: Camera) => {
@@ -71,9 +83,19 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     },
     removeNode(element) {
       nodes.delete(element);
+      selected.delete(element);
       element.remove();
     },
     getNodeRect: (element) => nodes.get(element) ?? null,
+    getNodesIn(rect) {
+      return [...nodes].filter(([, node]) => intersects(node, rect)).map(([element]) => element);
+    },
+    setSelection(elements) {
+      const next = new Set([...elements].filter((element) => nodes.has(element)));
+      for (const element of selected) if (!next.has(element)) element.style.outline = '';
+      for (const element of next) if (!selected.has(element)) element.style.outline = outline;
+      selected = next;
+    },
     getCamera: () => camera,
     setCamera,
     // The browser repaints DOM nodes itself.

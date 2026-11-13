@@ -1,4 +1,4 @@
-import type { Camera, GpuCanvasStats } from '../src/index';
+import type { Camera, GpuCanvasStats, Rect } from '../src/index';
 
 /**
  * The engines the benchmark compares, fed the same components and camera path: gpucanvas's GPU
@@ -17,11 +17,13 @@ export const parseMode = (value: string | null): Mode =>
 
 export type StageStats = Omit<GpuCanvasStats, 'mode'> & { mode: Mode };
 
-/** What the benchmark and the HUD need from an engine: its surface, camera and counters. */
+/** What the benchmark and the HUD need from an engine: its surface, camera, selection and counters. */
 export interface Stage {
   readonly mode: Mode;
   readonly surface: HTMLElement;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
+  getNodesIn(rect: Rect): HTMLElement[];
+  setSelection(elements: Iterable<HTMLElement>): void;
   getStats(): StageStats;
 }

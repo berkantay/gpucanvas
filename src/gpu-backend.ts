@@ -10,7 +10,13 @@ import {
 import { CompositeRenderer, FLOATS_PER_INSTANCE } from './gpu-renderer';
 import { boundsOf } from './node-style';
 import { Page } from './page';
-import { DEFAULT_CAMERA, type GpuCanvas, type GpuCanvasOptions } from './types';
+import {
+  DEFAULT_CAMERA,
+  DEFAULT_SELECTION_COLOR,
+  SELECTION_WIDTH,
+  type GpuCanvas,
+  type GpuCanvasOptions,
+} from './types';
 
 interface Node {
   element: HTMLElement;
@@ -197,6 +203,9 @@ function cssColorToRgba(color: string): [number, number, number, number] {
   return [r / 255, g / 255, b / 255, a / 255];
 }
 
+const premultiplied = ([r, g, b, a]: [number, number, number, number]) =>
+  [r * a, g * a, b * a, a] as [number, number, number, number];
+
 const distanceToCenter = (rect: Rect, view: Rect) =>
   Math.hypot(
     rect.x + rect.width / 2 - (view.x + view.width / 2),
@@ -271,9 +280,12 @@ export async function createGpuCanvas(
     format,
     atlas,
     ...colorsFor(options.background ?? '#f4f4f5'),
+    premultiplied(cssColorToRgba(options.selectionColor ?? DEFAULT_SELECTION_COLOR)),
+    SELECTION_WIDTH,
   );
 
   const nodes = new Map<HTMLElement, Node>();
+  const selected = new Set<Node>();
   const pages = new Map<Page, Set<Node>>();
   // What is on screen survives a full atlas: whole snapshots first, then sharp tiles.
   atlas.keep = function* () {
@@ -774,7 +786,8 @@ export async function createGpuCanvas(
 
   const composite = () => {
     let instances = visible.length;
-    for (const node of visible) instances += node.tiles.length + (node.preview ? 1 : 0);
+    for (const node of visible)
+      instances += node.tiles.length + (node.preview ? 1 : 0) + (selected.has(node) ? 1 : 0);
     renderer.reserve(instances);
     const data = renderer.instances;
     let count = 0;
@@ -795,6 +808,11 @@ export async function createGpuCanvas(
       } else {
         data[offset + 9] = 1;
       }
+    };
+    const pushRing = (rect: Rect) => {
+      const offset = count++ * FLOATS_PER_INSTANCE;
+      data.set([rect.x, rect.y, rect.width, rect.height], offset);
+      data[offset + 9] = 2;
     };
     let onThumbnail = 0;
     for (const node of visible) {
@@ -826,6 +844,8 @@ export async function createGpuCanvas(
         if (current(tile) && atlas.isValid(tile.slot)) push(tile.rect, tile.slot);
     }
     stats.onThumbnail = onThumbnail;
+    // Selection rings last, so no neighbor covers them.
+    if (selected.size) for (const node of visible) if (selected.has(node)) pushRing(node.rect);
     const cssWidth = canvas.clientWidth;
     const dpr = canvas.width / Math.max(1, cssWidth);
     renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count);
@@ -1279,6 +1299,7 @@ export async function createGpuCanvas(
       if (lingering === node) lingering = null;
       if (focused === node) focused = null;
       transitioning.delete(node);
+      selected.delete(node);
       nodes.delete(element);
       releaseNode(node);
       element.remove();
@@ -1287,6 +1308,19 @@ export async function createGpuCanvas(
     getNodeRect: (element) => {
       const node = nodes.get(element);
       return node ? { ...node.rect } : null;
+    },
+    getNodesIn(rect) {
+      const hits: HTMLElement[] = [];
+      for (const node of nodes.values()) if (intersects(node.rect, rect)) hits.push(node.element);
+      return hits;
+    },
+    setSelection(elements) {
+      selected.clear();
+      for (const element of elements) {
+        const node = nodes.get(element);
+        if (node) selected.add(node);
+      }
+      schedule();
     },
     getCamera: () => camera,
     setCamera,
