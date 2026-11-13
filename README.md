@@ -16,6 +16,10 @@ The same session on both sides: 5,000 live React screens, the same camera path, 
   shockwaves, glitch, VHS, or your own.
 - **[Snapshots](#snapshots).** Any node as an image, pixel diffs between versions, and a
   filmstrip of its history.
+- **[Agent view](#agent-view).** What is on the canvas as a short JSON tree with ids, and an
+  image of any region, for an AI agent to read and point at.
+- **[Marks](#marks).** Arrows between elements, comment pins, notes and live cursors that
+  follow the camera.
 
 ## Try it
 
@@ -210,6 +214,51 @@ strip.stop();
 A snapshot is the node as it looks now, at any scale, whether or not it is in view. It takes a
 paint or two, about 40 ms for a 1,500 by 1,000 pixel screen. In the demo, select a screen and
 press `S` to save it. Snapshots need the GPU backend; the DOM backend rejects.
+
+## Agent view
+
+An agent reads the canvas the way a person sees it: what is there, what it says, and where:
+
+```ts
+import { createAgentView } from 'gpucanvas';
+
+const view = createAgentView(canvas);
+view.describe(); // what is in view, as JSON
+// [{ id: 'e35', tag: 'div', rect: { x: -3552, y: -2561, width: 1496, height: 958 }, children: [
+//   { id: 'e6', tag: 'h1', role: 'heading', text: 'Welcome back', rect: { ... } },
+//   { id: 'e18', tag: 'input', role: 'textbox', name: 'Email', rect: { ... } },
+//   { id: 'e23', tag: 'input', role: 'checkbox', name: 'Keep me signed in', checked: true, ... },
+//   { id: 'e25', tag: 'button', role: 'button', text: 'Sign in', rect: { ... } }, ...] }]
+
+view.element('e25'); // the element behind an id
+await view.capture('e6', { scale: 2 }); // ImageData of that element
+await view.capture({ x: 0, y: 0, width: 4000, height: 3000 }, { scale: 0.25 }); // any region
+```
+
+Wrappers that add nothing are left out, so a sign-in screen is about 35 entries and 3.5 KB of
+JSON, read in 3 ms. Pass `rect` to read another region and `name` to label elements with your
+own names, such as their React component's. `capture` needs the GPU backend.
+
+## Marks
+
+Draw on top of the nodes. Marks follow the camera and the elements they are attached to, and
+stay the same size on screen at any zoom:
+
+```ts
+import { createMarks } from 'gpucanvas';
+
+const marks = createMarks(canvas);
+marks.connect(button, nextScreen, { label: 'goes to' }); // a curved arrow
+marks.pin(card, { label: '3', text: 'Rename to Continue?', onClick: openThread });
+marks.note(view.element('e6'), 'This heading is 2px off the grid'); // what an agent means
+const cursor = marks.cursor('Ada', { color: '#e11d48' });
+cursor.move({ x: 120, y: 80 }); // glides there, in world units
+marks.clear();
+```
+
+Arrows and pins also take a world point in place of an element. Marks are SVG and HTML in a
+layer above the canvas, so they work with both backends. In the demo, both are on `window`:
+`agentView` and `marks`.
 
 ## Run the demo
 

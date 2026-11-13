@@ -1036,7 +1036,7 @@ export async function createGpuCanvas(
             sourceWidth: node.rect.width,
             sourceHeight: node.rect.height,
           },
-          { texture, premultipliedAlpha: false },
+          { texture, size: { width, height }, premultipliedAlpha: false },
         );
       } catch (error) {
         texture.destroy();

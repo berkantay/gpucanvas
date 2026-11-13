@@ -5,10 +5,14 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import {
   bindEditor,
+  createAgentView,
+  createMarks,
   fitCamera,
   supportsGpuCanvas,
   toBlob,
+  type AgentView,
   type GpuCanvas as GpuCanvasInstance,
+  type Marks,
   type EditorOptions,
   type TransformEvent,
 } from '../src/index';
@@ -108,6 +112,9 @@ const backgroundColor = () => getComputedStyle(document.body).backgroundColor;
 declare global {
   interface Window {
     gpucanvas?: GpuCanvasInstance;
+    /** For agents and the console: read the canvas, and draw on it. */
+    agentView?: AgentView;
+    marks?: Marks;
     /** The engine on screen, whichever it is. */
     stage?: Stage;
     runBench?: () => Promise<BenchResult>;
@@ -329,6 +336,8 @@ function App() {
         className="h-screen w-screen"
         onReady={(instance) => {
           window.gpucanvas = instance;
+          window.agentView = createAgentView(instance);
+          window.marks = createMarks(instance);
           // The GPU canvas lays nodes out at 1:1, so clusters stream in with all of them in
           // view. The DOM baseline mounts with the first cluster in view and pulls back
           // afterwards: Recharts measures its tooltip and legend with

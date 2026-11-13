@@ -2,6 +2,8 @@ import { createDomCanvas } from './dom-backend';
 import { createGpuCanvas as createGpuBackend, supportsGpuCanvas } from './gpu-backend';
 import type { GpuCanvas, GpuCanvasOptions } from './types';
 
+export type { AgentElement, AgentView, DescribeOptions } from './agent';
+export { createAgentView } from './agent';
 export type { Camera, Point, Rect } from './camera';
 export { fitCamera, screenToWorld, worldToScreen, zoomAt } from './camera';
 export type { Editor, EditorOptions, TransformEvent } from './editor';
@@ -9,6 +11,8 @@ export { bindEditor } from './editor';
 export type { EditorPick, Layer } from './layers';
 export type { Effect, EffectDefinition } from './effects';
 export { defineEffect, EFFECTS as effects } from './effects';
+export type { CursorMark, Mark, Marks } from './marks';
+export { createMarks } from './marks';
 export type { Filmstrip, FilmstripFrame, ImageDiff } from './snapshots';
 export { diffImages, recordFilmstrip, toBlob } from './snapshots';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
