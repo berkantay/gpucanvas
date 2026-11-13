@@ -485,7 +485,7 @@ export function FlagNotice() {
       <p className="mt-1">
         {WEBKIT
           ? 'gpucanvas draws with WebGPU and HTML-in-Canvas, which iPhone and iPad browsers do not have yet. This is the plain DOM version. Open the page in Chrome on a computer or Android to see the GPU one.'
-          : 'gpucanvas draws with WebGPU and HTML-in-Canvas. Chrome 157 and later has it; if it is off, turn on the flag.'}
+          : 'gpucanvas draws with WebGPU and HTML-in-Canvas. Chrome 157 and later on a computer has both on by default, so updating Chrome is usually enough. On other Chromium builds, turn on the flag:'}
       </p>
       {!WEBKIT && (
         <ol className="mt-3 list-decimal space-y-1 ps-5">

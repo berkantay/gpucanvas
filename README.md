@@ -55,16 +55,14 @@ later. Thirty agent cursors build the first view, then the camera pulls out to a
 - Press `b` to run the benchmark tour, `f` to fit every screen in view, `t` to switch the theme.
 - On a phone: pinch to zoom, drag to pan, tap to use a screen.
 
-The GPU path needs HTML-in-Canvas, which is behind a flag:
+The GPU path needs WebGPU and HTML-in-Canvas. Chrome 157 and later on a computer has both on by
+default, so the demo opens on the GPU path. On older Chrome or other Chromium builds, turn it on
+with `chrome://flags/#canvas-draw-element` and relaunch.
 
-1. Open `chrome://flags/#canvas-draw-element`
-2. Set it to Enabled and relaunch Chrome
-3. Reload the demo
-
-Without the flag the demo runs the DOM fallback with 1,000 screens and says so. Phones start
-smaller so the tab is not killed for memory: 1,000 screens on the GPU path (Chrome on Android with
-the flag) and 250 as DOM. iPhone and iPad browsers have no HTML-in-Canvas yet, so they run the DOM
-version and say so.
+Without HTML-in-Canvas the demo runs the DOM fallback with 1,000 screens and says so. Phones start
+smaller so the tab is not killed for memory: 1,000 screens on the GPU path and 250 as DOM. Firefox,
+Safari and every iPhone or iPad browser have no HTML-in-Canvas yet, so they run the DOM version and
+say so.
 
 Status: early (0.4). The API can still change.
 
