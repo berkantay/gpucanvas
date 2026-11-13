@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { fitCamera, supportsGpuCanvas, type GpuCanvas as GpuCanvasInstance } from '../src/index';
 import { GpuCanvas } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
-import { Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
+import { FlagNotice, Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
 import { startAgents, type Agents } from './agents';
 import { bindMarquee } from './marquee';
 import { buildPlayground, ClusterNodes } from './playground';
@@ -16,7 +16,8 @@ const params = new URLSearchParams(location.search);
 const gpuSupported = supportsGpuCanvas();
 const requested = parseMode(params.get('mode'));
 const MODE = requested === 'gpu' && !gpuSupported ? 'dom' : requested;
-const NODES = Number(params.get('n')) || 5_000;
+/** Without the GPU path the DOM fallback starts smaller, so phones and other browsers keep up. */
+const NODES = Number(params.get('n')) || (gpuSupported ? 5_000 : 1_000);
 /** `?hud=0` leaves only the canvas on screen, for recording footage. */
 const HUD = params.get('hud') !== '0';
 /** `?agents=0` turns off the cursors building screens. */
@@ -271,6 +272,7 @@ function App() {
           <Meter canvas={canvas} mounted={mountedNodes} total={NODES} />
           <Results nodes={NODES} results={results} />
           <Hints />
+          {!gpuSupported && <FlagNotice />}
         </>
       )}
     </>

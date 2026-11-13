@@ -250,16 +250,21 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       marks.add(mark);
       const dx = Math.random() * 44 - 22;
       const dy = Math.random() * 44 - 22;
-      element.firstElementChild!.animate(
-        {
-          transform: ['translate(-50%,-50%) scale(0)', `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`],
-          opacity: [1, 0],
-        },
-        { duration: 650, delay: i * 60, easing: 'ease-out', fill: 'both' },
-      ).finished.then(() => {
-        marks.delete(mark);
-        element.remove();
-      });
+      element
+        .firstElementChild!.animate(
+          {
+            transform: [
+              'translate(-50%,-50%) scale(0)',
+              `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`,
+            ],
+            opacity: [1, 0],
+          },
+          { duration: 650, delay: i * 60, easing: 'ease-out', fill: 'both' },
+        )
+        .finished.then(() => {
+          marks.delete(mark);
+          element.remove();
+        });
     }
   };
 

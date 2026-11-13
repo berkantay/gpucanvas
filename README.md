@@ -4,9 +4,21 @@ Put thousands of live DOM nodes on an infinite canvas and let the GPU pan and zo
 
 ![The same 5,000 live React screens as plain DOM (left) and in gpucanvas (right), with each side's frame rate measured live](docs/benchmark.gif)
 
-The same session on both sides: 5,000 live React screens, the same camera path, a message typed and sent. Left, every screen is plain DOM under a CSS transform. Right, gpucanvas. Recorded in Chrome on a MacBook Pro; the frame rates are measured live in each run. Run it yourself with the demo below.
+The same session on both sides: 5,000 live React screens, the same camera path, a message typed and sent. Left, every screen is plain DOM under a CSS transform. Right, gpucanvas. Recorded in Chrome on a MacBook Pro; the frame rates are measured live in each run. Run it yourself in the [live demo](https://berkantay.github.io/gpucanvas/).
 
-Status: early (0.1). The API can still change.
+## Try it
+
+Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or later. Thirty agent cursors build the first view, then the camera pulls out to all 5,000 screens. Press `b` to run the benchmark tour.
+
+The GPU path needs HTML-in-Canvas, which is behind a flag:
+
+1. Open `chrome://flags/#canvas-draw-element`
+2. Set it to Enabled and relaunch Chrome
+3. Reload the demo
+
+Without the flag the demo runs the DOM fallback with 1,000 screens and says so.
+
+Status: early (0.2). The API can still change.
 
 ```sh
 npm install gpucanvas
@@ -74,9 +86,13 @@ bun run dev        # http://localhost:5199/?mode=gpu&n=10000  (mode: auto | gpu 
 
 ## Measured (M-series Mac, Chrome 157, 1600 x 900 window, DPR 1)
 
-The demo's benchmark (press `b`) runs a 94-second session: from the overview into clusters of
-app screens, close-ups up to 500% zoom, 20 clicks and typed messages, then back out. Every frame
-is timed.
+The demo's benchmark (press `b`) runs a 30-second tour: a message typed and sent, a chart
+animating, a push to 500% zoom, shift-click picks and a selection sweep, while 30 agent cursors
+build screens around the view. Every frame is timed. At 5,000 screens it measures 113 to 115 fps
+for gpucanvas and 18 to 20 for DOM.
+
+The table below was measured with the 0.1 benchmark, a 94-second session from the overview into
+clusters of app screens, close-ups up to 500% zoom, 20 clicks and typed messages, then back out.
 
 | Screens | gpucanvas avg fps | gpucanvas p95 | DOM avg fps | DOM p95  | Mount gpucanvas / DOM |
 | ------- | ----------------- | ------------- | ----------- | -------- | --------------------- |

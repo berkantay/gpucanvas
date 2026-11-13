@@ -312,6 +312,71 @@ function ResultRow({ mode, result, best }: { mode: Mode; result?: BenchResult; b
   );
 }
 
+const FLAG = 'chrome://flags/#canvas-draw-element';
+const REPO = 'https://github.com/berkantay/gpucanvas';
+const DISMISSED = 'gpucanvas.flagNotice';
+
+/** For browsers without HTML-in-Canvas: what they are seeing, and how to see the GPU path. */
+export function FlagNotice() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(DISMISSED) !== '1';
+    } catch {
+      return true;
+    }
+  });
+  const [copied, setCopied] = useState(false);
+  if (!open) return null;
+  const copy = () =>
+    navigator.clipboard?.writeText(FLAG).then(
+      () => setCopied(true),
+      () => {},
+    );
+  const close = () => {
+    setOpen(false);
+    try {
+      localStorage.setItem(DISMISSED, '1');
+    } catch {
+      // It shows again next visit.
+    }
+  };
+  return (
+    <div
+      className={cx(
+        PANEL,
+        'fixed top-20 left-4 z-20 w-[min(26rem,calc(100vw-2rem))] p-4 text-body-2-regular text-text-secondary',
+      )}
+    >
+      <div className="text-body-1-semibold text-text-primary">You are seeing the DOM fallback</div>
+      <p className="mt-1">
+        gpucanvas draws with WebGPU and HTML-in-Canvas. Chrome 157 and later has it behind a flag.
+      </p>
+      <ol className="mt-3 list-decimal space-y-1 ps-5">
+        <li>
+          Open <code className="text-text-primary">{FLAG}</code>
+        </li>
+        <li>Set it to Enabled and relaunch Chrome</li>
+        <li>Come back to this page</li>
+      </ol>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button size="small" onClick={copy}>
+          {copied ? 'Copied' : 'Copy flag address'}
+        </Button>
+        <Button
+          size="small"
+          variant="secondary"
+          onClick={() => window.open(`${REPO}/releases/latest`, '_blank', 'noreferrer')}
+        >
+          Watch the film
+        </Button>
+        <Button size="small" variant="secondary" onClick={close}>
+          Hide
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function Hints() {
   return (
     <div
