@@ -85,8 +85,9 @@ export function fitCamera(
 }
 
 /**
- * Wheel and drag input: trackpad scroll pans, pinch or ctrl/cmd + wheel zooms, dragging empty
- * space pans. Calls `onChange` with the next camera; the caller owns the camera value.
+ * Wheel, drag and touch input: trackpad scroll pans, pinch or ctrl/cmd + wheel zooms, dragging
+ * empty space pans, and a two-finger touch pinch zooms and pans, wherever the fingers land. Calls
+ * `onChange` with the next camera; the caller owns the camera value.
  */
 export function bindCameraInput(
   element: HTMLElement,
@@ -110,7 +111,27 @@ export function bindCameraInput(
   };
 
   let drag: { pointerId: number; x: number; y: number } | null = null;
+  /** Fingers down on the canvas, nodes included, so a pinch can start on one. */
+  const touches = new Map<number, { x: number; y: number }>();
+  const pinch = () => {
+    const [a, b] = [...touches.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
   const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touches.size === 2) {
+        drag = null;
+        for (const id of touches.keys()) {
+          try {
+            element.setPointerCapture(id);
+          } catch {
+            // The finger already lifted; pointerup removes it.
+          }
+        }
+        return;
+      }
+    }
     // Only drags that start on the canvas background pan; nodes keep their own pointer events.
     // Shift-drags are left to the app, for a selection box.
     if ((event.button !== 0 && event.button !== 1) || event.shiftKey) return;
@@ -123,6 +144,31 @@ export function bindCameraInput(
     element.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent) => {
+    const touch = touches.get(event.pointerId);
+    if (touch && touches.size === 2) {
+      const before = pinch();
+      touch.x = event.clientX;
+      touch.y = event.clientY;
+      const after = pinch();
+      if (!before.distance) return;
+      const bounds = element.getBoundingClientRect();
+      const zoomed = zoomAt(
+        getCamera(),
+        before.x - bounds.left,
+        before.y - bounds.top,
+        after.distance / before.distance,
+      );
+      onChange({
+        ...zoomed,
+        x: zoomed.x - (after.x - before.x) / zoomed.zoom,
+        y: zoomed.y - (after.y - before.y) / zoomed.zoom,
+      });
+      return;
+    }
+    if (touch) {
+      touch.x = event.clientX;
+      touch.y = event.clientY;
+    }
     if (!drag || event.pointerId !== drag.pointerId) return;
     const camera = getCamera();
     onChange({
@@ -134,6 +180,7 @@ export function bindCameraInput(
     drag.y = event.clientY;
   };
   const onPointerUp = (event: PointerEvent) => {
+    touches.delete(event.pointerId);
     if (drag?.pointerId === event.pointerId) drag = null;
   };
 

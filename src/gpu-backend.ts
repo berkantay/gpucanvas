@@ -1232,14 +1232,50 @@ export async function createGpuCanvas(
   /** Where the last press landed, in world units, and when: effects such as shockwaves use it. */
   let press: Point = FAR_AWAY;
   let pressedAt = -Infinity;
+  /**
+   * Touch and pen press without hovering first, so the node under them is not hit-testable yet and
+   * the tap lands on the canvas or its page. The press makes the node live, and a click that did
+   * not reach inside it is handed to the element under the finger.
+   */
+  let tapped = false;
   const onPointerDown = (event: PointerEvent) => {
     const bounds = canvas.getBoundingClientRect();
-    press = screenToWorld(camera, {
+    const at = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    press = screenToWorld(camera, at);
+    pressedAt = performance.now();
+    if (event.pointerType !== 'mouse') {
+      pointer = at;
+      pickLive();
+      tapped = true;
+    }
+    if (effects.size) schedule();
+  };
+  const onClick = (event: MouseEvent) => {
+    if (!tapped) return;
+    tapped = false;
+    const bounds = canvas.getBoundingClientRect();
+    const point = screenToWorld(camera, {
       x: event.clientX - bounds.left,
       y: event.clientY - bounds.top,
     });
-    pressedAt = performance.now();
-    if (effects.size) schedule();
+    let top: Node | null = null;
+    for (const node of nodes.values()) if (containsPoint(node.rect, point)) top = node;
+    if (!top || top.element.contains(event.target as Element)) return;
+    // An icon's SVG is not focusable or clickable the HTML way; its HTML parent is.
+    let target: Element | null = elementInNode(top.element, top.rect, point);
+    while (target && !(target instanceof HTMLElement)) target = target.parentElement;
+    if (!(target instanceof HTMLElement)) return;
+    target.focus({ preventScroll: true });
+    target.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }),
+    );
   };
   const onFocusIn = (event: FocusEvent) => {
     const node = nodeOf(event.target as HTMLElement) ?? null;
@@ -1282,6 +1318,8 @@ export async function createGpuCanvas(
   surface.addEventListener('pointermove', onPointerMove);
   surface.addEventListener('pointerleave', onPointerLeave);
   surface.addEventListener('pointerdown', onPointerDown, true);
+  // Bubble phase: an editor that takes the press stops the click before it gets here.
+  surface.addEventListener('click', onClick);
   canvas.addEventListener('focusin', onFocusIn);
   canvas.addEventListener('focusout', onFocusOut);
   // A transition paints without touching the DOM, so a click (from a person or from script)
@@ -1584,6 +1622,7 @@ export async function createGpuCanvas(
       surface.removeEventListener('pointermove', onPointerMove);
       surface.removeEventListener('pointerleave', onPointerLeave);
       surface.removeEventListener('pointerdown', onPointerDown, true);
+      surface.removeEventListener('click', onClick);
       canvas.removeEventListener('focusin', onFocusIn);
       canvas.removeEventListener('focusout', onFocusOut);
       canvas.removeEventListener('transitionrun', onTransitionRun);
