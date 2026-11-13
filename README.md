@@ -1,7 +1,8 @@
 # gpucanvas
 
 Put thousands of live DOM nodes on an infinite canvas: the GPU draws them, an editor selects,
-moves and resizes them, and shaders run on them.
+moves and resizes them, shaders and transitions run on them, and an AI agent can read them and
+point at them.
 
 ![The same 5,000 live React screens as plain DOM (left) and in gpucanvas (right), with each side's frame rate measured live](docs/benchmark.gif)
 
@@ -23,6 +24,11 @@ The same session on both sides: 5,000 live React screens, the same camera path, 
 - **[Marks](#marks).** Arrows between elements, comment pins, notes and live cursors that
   follow the camera.
 
+![An agent cursor flags a heading, links two buttons and drops a pin; the screen wipes out and dissolves back; a glass lens follows the pointer; shockwaves ripple from clicks](docs/features.gif)
+
+Marks from an agent, a wipe and a dissolve, the glass lens and shockwaves, all on live
+components. Recorded in Chrome from the demo.
+
 ## Try it
 
 Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or
@@ -34,6 +40,8 @@ later. Thirty agent cursors build the first view, then the camera pulls out to a
   [shockwave](https://berkantay.github.io/gpucanvas/?effect=shockwave) (click anywhere),
   [frost](https://berkantay.github.io/gpucanvas/?effect=frost),
   [glitch](https://berkantay.github.io/gpucanvas/?effect=glitch).
+- Select a screen and press `D` to dissolve it, `W` to wipe it, or `S` to save it as a PNG.
+- In the console, `agentView.describe()` lists what is in view, and `marks` draws on it.
 - Press `b` to run the benchmark tour.
 
 The GPU path needs HTML-in-Canvas, which is behind a flag:
@@ -157,8 +165,9 @@ Built in:
   `dither` (a lens of big dithered pixels).
 - On each press: `shockwave`, a ring that bends the node as it spreads.
 - Running on their own: `glitch`, `vhs`, `glow`, `hue`, `ripple`.
-- Still: `blur`, `pixelate`, `grayscale`, and `dissolve` for a node leaving or arriving (its
-  parameter is the progress, 0 to 1).
+- Still: `blur`, `pixelate`, `grayscale`.
+- [Transitions](#transitions): `dissolve`, `wipe` and `fade`, for a node leaving or arriving
+  (the first parameter is the progress, 0 to 1).
 
 Animated effects draw every frame while their node is in view; still ones cost nothing once
 drawn.
@@ -325,7 +334,7 @@ to npm from GitHub Actions, with provenance, through npm trusted publishing. See
 The demo's benchmark (press `b`) runs a 30-second tour: a message typed and sent, a chart
 animating, a push to 500% zoom, shift-click picks and a selection sweep, while 30 agent cursors
 build screens around the view. Every frame is timed. At 5,000 screens it measures 113 to 115 fps
-for gpucanvas and 18 to 20 for DOM.
+for gpucanvas and 18 to 20 for DOM, and 138 for gpucanvas in the effects run below.
 
 The table below was measured with the 0.1 benchmark, a 94-second session from the overview into
 clusters of app screens, close-ups up to 500% zoom, 20 clicks and typed messages, then back out.
@@ -336,6 +345,20 @@ clusters of app screens, close-ups up to 500% zoom, 20 clicks and typed messages
 | 10,000  | 108               | 16.7 ms       | 9           | 133.8 ms | 1.8 s / 3.4 s         |
 
 DOM is the same screens in one CSS-transformed container, which is also the fallback backend.
+
+Shader effects on every one of the 5,000 screens, the same 30-second tour, vsync off:
+
+| Effect         | gpucanvas avg fps | p95     |
+| -------------- | ----------------- | ------- |
+| none           | 138               | 15.2 ms |
+| glow           | 135               | 15.6 ms |
+| blur (32 taps) | 138               | 16.7 ms |
+| glass          | 122               | 18.2 ms |
+| frost          | 146               | 13.8 ms |
+
+Effects draw from each node's snapshot in the same pass, so most cost nothing measurable; glass,
+which samples around the pointer with a rim and shadow, costs about 12%. Each figure is one run,
+so a gap of a few percent, like frost above none, is noise rather than a speedup.
 
 ## Chrome 157 findings (differ from the WICG explainer)
 
