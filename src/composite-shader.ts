@@ -8,13 +8,14 @@
  * fragment shader takes up to 4 x 4 samples spread over the pixel's footprint (a box filter),
  * clamped to the node's own atlas rectangle so neighbors never bleed in.
  */
-export const compositeShader = /* wgsl */ `
+const prelude = /* wgsl */ `
 struct View {
   size: vec2f,        // canvas size in CSS pixels
   origin: vec2f,      // camera position, world units
   zoom: f32,
   dpr: f32,
   atlasSize: f32,
+  time: f32,          // seconds since the canvas started
   placeholder: vec4f, // premultiplied color for nodes without a snapshot
 }
 
@@ -25,7 +26,8 @@ struct View {
 struct Instance {
   @location(0) rect: vec4f, // world x, y, width, height
   @location(1) uv: vec4f,   // atlas texels x0, y0, x1, y1; for a ring, its premultiplied color
-  @location(2) info: vec4f, // layer, kind (0 snapshot, 1 placeholder, 2 ring), ring width in CSS px
+  @location(2) info: vec4f, // layer, kind (0 snapshot, 1 placeholder, 2 ring), ring width or effect pad
+  @location(3) params: vec4f, // an effect's parameters
 }
 
 struct Varyings {
@@ -34,14 +36,17 @@ struct Varyings {
   @location(1) @interpolate(flat) bounds: vec4f,
   @location(2) @interpolate(flat) info: vec2f,
   @location(3) @interpolate(flat) color: vec4f,
+  @location(4) uv: vec2f, // 0 to 1 across the node, past that in an effect's padding
+  @location(5) @interpolate(flat) size: vec2f,
+  @location(6) @interpolate(flat) params: vec4f,
 }
 
 @vertex
 fn vs(@builtin(vertex_index) vertex: u32, instance: Instance) -> Varyings {
   let corner = vec2f(f32(vertex & 1u), f32(vertex >> 1u));
-  // A ring's quad reaches past its element by the ring's width.
+  // A ring's quad reaches past its element by the ring's width, an effect's by its padding.
   let ring = instance.info.y > 1.5;
-  let grow = select(0.0, instance.info.z / view.zoom, ring);
+  let grow = select(instance.info.z, instance.info.z / view.zoom, ring);
   let start = instance.rect.xy - grow;
   let end = instance.rect.xy + instance.rect.zw + grow;
   // Snap edges to device pixels so a snapshot drawn at its raster scale stays crisp.
@@ -57,15 +62,22 @@ fn vs(@builtin(vertex_index) vertex: u32, instance: Instance) -> Varyings {
     out.bounds = vec4f(0.0, 0.0, instance.rect.zw);
     out.color = instance.uv;
   } else {
-    out.texel = mix(instance.uv.xy, instance.uv.zw, corner);
+    let pad = grow * (instance.uv.zw - instance.uv.xy) / instance.rect.zw;
+    out.texel = mix(instance.uv.xy - pad, instance.uv.zw + pad, corner);
+    out.color = instance.uv;
     // Half a texel inside the node's rectangle: the outermost sample center that cannot blend
     // with whatever sits next to it in the atlas.
     out.bounds = vec4f(instance.uv.xy + 0.5, instance.uv.zw - 0.5);
   }
   out.info = instance.info.xy;
+  out.uv = mix(-grow / instance.rect.zw, 1.0 + grow / instance.rect.zw, corner);
+  out.size = instance.rect.zw;
+  out.params = instance.params;
   return out;
 }
+`;
 
+export const compositeShader = /* wgsl */ `${prelude}
 @fragment
 fn fs(in: Varyings) -> @location(0) vec4f {
   // Derivatives first: WGSL only allows them in uniform control flow.
@@ -92,5 +104,39 @@ fn fs(in: Varyings) -> @location(0) vec4f {
     }
   }
   return color / f32(taps.x * taps.y);
+}
+`;
+
+/**
+ * A node wearing an effect: the effect's WGSL, given its node's pixels through \`source\`. Effects
+ * read the whole snapshot, never sharper tiles, so they can sample anywhere in the node.
+ */
+export const effectShader = (wgsl: string) => /* wgsl */ `${prelude}
+struct EffectInput {
+  uv: vec2f,
+  size: vec2f,
+  time: f32,
+  zoom: f32,
+  params: vec4f,
+}
+
+var<private> sourceRect: vec4f;
+var<private> sourceLayer: i32;
+
+fn source(uv: vec2f) -> vec4f {
+  if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
+    return vec4f(0.0);
+  }
+  let texel = clamp(mix(sourceRect.xy, sourceRect.zw, uv), sourceRect.xy + 0.5, sourceRect.zw - 0.5);
+  return textureSampleLevel(atlas, atlasSampler, texel / view.atlasSize, sourceLayer, 0.0);
+}
+
+${wgsl}
+
+@fragment
+fn fs(in: Varyings) -> @location(0) vec4f {
+  sourceRect = in.color;
+  sourceLayer = i32(in.info.x);
+  return effect(EffectInput(in.uv, in.size, view.time, view.zoom, in.params));
 }
 `;

@@ -379,12 +379,18 @@ export function Select({
 
 export const SelectItem = ({
   id,
+  isDisabled,
   children,
 }: {
   id: string;
   textValue?: string;
+  isDisabled?: boolean;
   children: ReactNode;
-}) => <option value={id}>{children}</option>;
+}) => (
+  <option value={id} disabled={isDisabled}>
+    {children}
+  </option>
+);
 
 /* ----- Choosers: segmented control and tabs -------------------------------------------------- */
 

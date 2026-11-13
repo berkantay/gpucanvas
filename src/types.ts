@@ -1,4 +1,5 @@
 import type { Camera, Point, Rect } from './camera';
+import type { Effect } from './effects';
 
 export type GpuCanvasMode = 'gpu' | 'dom';
 
@@ -84,6 +85,12 @@ export interface GpuCanvas {
   setSelection(elements: Iterable<Element>): void;
   /** Outlines one element more lightly, such as the one under the pointer. Pass null to clear. */
   setHover(element: Element | null): void;
+  /**
+   * Draws a node through a shader effect, such as \`ripple\` or one from \`defineEffect\`, with up to
+   * four parameters (the effect's defaults otherwise). Pass null to remove it. The DOM backend
+   * shows effects that have a CSS look as a \`filter\` and ignores the rest.
+   */
+  setEffect(node: HTMLElement, effect: Effect | null, params?: ArrayLike<number>): void;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
   /** A point in surface pixels as world units, under the current camera. */

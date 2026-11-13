@@ -11,7 +11,8 @@ import {
   Select,
   SelectItem,
 } from './ui';
-import { BENCH_DURATION_MS, type BenchResult } from './bench';
+import { BENCH_DURATION_MS, resultKey, type BenchResult } from './bench';
+import { DEMO_EFFECTS, type DemoEffect } from './effects';
 import { MODE_LABEL, MODES, type Mode, type Stage } from './stage';
 
 export const NODE_COUNTS = [1_000, 2_500, 5_000, 10_000];
@@ -26,8 +27,10 @@ export function Toolbar({
   benchProgress,
   dark,
   canBench,
+  effect,
   onMode,
   onNodes,
+  onEffect,
   onBench,
   onTheme,
 }: {
@@ -37,8 +40,10 @@ export function Toolbar({
   benchProgress: number | null;
   dark: boolean;
   canBench: boolean;
+  effect: DemoEffect | null;
   onMode: (mode: Mode) => void;
   onNodes: (nodes: number) => void;
+  onEffect: (effect: DemoEffect | null) => void;
   onBench: () => void;
   onTheme: () => void;
 }) {
@@ -72,6 +77,23 @@ export function Toolbar({
         {NODE_COUNTS.map((count) => (
           <SelectItem key={count} id={String(count)} textValue={`${format(count)} components`}>
             {format(count)} components
+          </SelectItem>
+        ))}
+      </Select>
+      <Select
+        aria-label="Shader effect"
+        selectedKey={effect ?? 'none'}
+        onSelectionChange={(key) =>
+          key !== null && onEffect(key === 'none' ? null : (key as DemoEffect))
+        }
+        triggerClassName="min-w-28"
+      >
+        <SelectItem id="none" textValue="No effect">
+          No effect
+        </SelectItem>
+        {Object.entries(DEMO_EFFECTS).map(([id, { label, effect: shader }]) => (
+          <SelectItem key={id} id={id} textValue={label} isDisabled={mode === 'dom' && !shader.css}>
+            {mode === 'dom' && !shader.css ? `${label} (GPU only)` : label}
           </SelectItem>
         ))}
       </Select>
@@ -246,14 +268,16 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** The latest run of every engine at this node count, fastest first. */
 export function Results({
   nodes,
+  effect,
   results,
 }: {
   nodes: number;
+  effect: DemoEffect | null;
   results: Record<string, BenchResult>;
 }) {
   const runs = MODES.map((mode) => ({
     mode,
-    result: results[`${nodes}:${mode}`] as BenchResult | undefined,
+    result: results[resultKey(nodes, mode, effect)] as BenchResult | undefined,
   }));
   if (!runs.some((run) => run.result)) return null;
   const best = Math.max(60, ...runs.map((run) => run.result?.avgFps ?? 0));
@@ -268,7 +292,9 @@ export function Results({
     <div className={cx(PANEL, 'fixed right-4 bottom-4 z-20 w-80 p-4')}>
       <div className="flex items-baseline justify-between">
         <span className="text-body-semibold text-text-primary">Benchmark</span>
-        <span className="text-body-2-regular text-text-secondary">{format(nodes)} components</span>
+        <span className="text-body-2-regular text-text-secondary">
+          {format(nodes)} components{effect ? `, ${DEMO_EFFECTS[effect].label.toLowerCase()}` : ''}
+        </span>
       </div>
       {ours && rival && (
         <p className="mt-2 text-title-2-semibold text-text-primary">

@@ -13,6 +13,7 @@ import {
 } from '../src/index';
 import { GpuCanvas, labelComponent, pickComponents } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
+import { DEMO_EFFECTS, parseEffect } from './effects';
 import { FlagNotice, Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
 import { startAgents, type Agents } from './agents';
 import { buildPlayground, ClusterNodes } from './playground';
@@ -39,6 +40,8 @@ const EDITOR: EditorOptions =
   PICK === 'element' || PICK === 'node'
     ? { pick: PICK }
     : { pick: pickComponents, label: labelComponent };
+/** `?effect=glow` (or hue, blur, ripple, pixelate, grayscale): a shader on every component. */
+const INITIAL_EFFECT = parseEffect(params.get('effect'));
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
 /** Where the bench works: clusters of product screens, not walls of notes. */
 const SHOWCASE = CLUSTERS.flatMap((cluster, id) =>
@@ -177,6 +180,7 @@ function App() {
   const [dark, setDark] = useState(readTheme);
   const [results, setResults] = useState(loadResults);
   const [benchProgress, setBenchProgress] = useState<number | null>(null);
+  const [effect, setEffect] = useState(INITIAL_EFFECT);
   const progressive = useProgressiveMount(CLUSTERS.length, gpucanvas !== null);
   const { mountMs } = progressive;
   const mountedNodes = MOUNTED_NODES[progressive.mounted];
@@ -185,11 +189,12 @@ function App() {
     if (!canvas || mountMs === null || benchProgress !== null) return;
     setBenchProgress(0);
     const result = await runBench(canvas, BOUNDS, SHOWCASE, mountMs, (t) => setBenchProgress(t));
+    if (effect) result.effect = effect;
     window.benchResult = result;
     console.log('[gpucanvas bench]', JSON.stringify(result));
     setResults(saveResult(result));
     setBenchProgress(null);
-  }, [canvas, mountMs, benchProgress]);
+  }, [canvas, mountMs, benchProgress, effect]);
 
   const toggleTheme = useCallback(() => {
     const next = !dark;
@@ -211,6 +216,8 @@ function App() {
       );
   }, [canvas]);
 
+  const effectRef = useRef(effect);
+  effectRef.current = effect;
   const latest = useRef({ bench, toggleTheme, fit });
   latest.current = { bench, toggleTheme, fit };
   useEffect(() => {
@@ -253,6 +260,18 @@ function App() {
     };
   }, [canvas, mountMs, agents]);
 
+  // Every component wears the effect once all have mounted. The URL keeps it across mode switches.
+  useEffect(() => {
+    const next = new URLSearchParams(location.search);
+    if (effect) next.set('effect', effect);
+    else next.delete('effect');
+    history.replaceState(null, '', `?${next}`);
+    if (!gpucanvas || mountMs === null) return;
+    const all = gpucanvas.getNodesIn({ x: -1e9, y: -1e9, width: 2e9, height: 2e9 });
+    const shader = effect ? DEMO_EFFECTS[effect].effect : null;
+    for (const node of all) gpucanvas.setEffect(node, shader);
+  }, [gpucanvas, mountMs, effect]);
+
   useEffect(() => {
     if (!gpucanvas) return;
     const editor = bindEditor(gpucanvas, {
@@ -268,6 +287,7 @@ function App() {
     window.stage = canvas;
     window.runBench = () =>
       runBench(canvas, BOUNDS, SHOWCASE, mountMs).then((result) => {
+        if (effectRef.current) result.effect = effectRef.current;
         window.benchResult = result;
         setResults(saveResult(result));
         return result;
@@ -312,11 +332,13 @@ function App() {
             canBench={canvas !== null && mountMs !== null}
             onMode={(mode) => navigate({ mode })}
             onNodes={(n) => navigate({ n: String(n) })}
+            effect={effect}
+            onEffect={setEffect}
             onBench={bench}
             onTheme={toggleTheme}
           />
           <Meter canvas={canvas} mounted={mountedNodes} total={NODES} />
-          <Results nodes={NODES} results={results} />
+          <Results nodes={NODES} effect={effect} results={results} />
           <Hints edit={EDIT} />
           {!gpuSupported && <FlagNotice />}
         </>

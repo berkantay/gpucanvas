@@ -7,6 +7,8 @@ export { fitCamera, screenToWorld, worldToScreen, zoomAt } from './camera';
 export type { Editor, EditorOptions, TransformEvent } from './editor';
 export { bindEditor } from './editor';
 export type { EditorPick, Layer } from './layers';
+export type { Effect, EffectDefinition } from './effects';
+export { defineEffect, EFFECTS as effects } from './effects';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
 export { supportsGpuCanvas };
 

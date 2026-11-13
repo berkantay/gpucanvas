@@ -11,7 +11,8 @@ import {
   type Rect,
 } from './camera';
 import { elementInNode, nodeOfElement, rectInNode } from './elements';
-import { CompositeRenderer, FLOATS_PER_INSTANCE } from './gpu-renderer';
+import { effectPad, effectParams, type Effect } from './effects';
+import { CompositeRenderer, FLOATS_PER_INSTANCE, type Run } from './gpu-renderer';
 import { boundsOf } from './node-style';
 import { Page } from './page';
 import {
@@ -294,7 +295,13 @@ export async function createGpuCanvas(
     : selectionColor;
 
   const nodes = new Map<HTMLElement, Node>();
-  /** Outlined elements: nodes or anything inside them. */
+  /** Effects nodes wear, with their parameters and how far past the node they draw. */
+  const effects = new Map<HTMLElement, { effect: Effect; params: number[]; pad: number }>();
+  const startedAt = performance.now();
+  renderer.onEffectReady = () => schedule();
+  const runs: Run[] = [];
+  /** An effect in view animates, or is still compiling: draw again next frame. */
+  let effectsMoving = false;
   let selection = new Set<Element>();
   let hovered: Element | null = null;
   /** World rects of outlined elements inside nodes, measured once until their layout changes. */
@@ -814,7 +821,17 @@ export async function createGpuCanvas(
     renderer.reserve(instances);
     const data = renderer.instances;
     let count = 0;
+    runs.length = 0;
+    effectsMoving = false;
+    let runEffect: Effect | null = null;
+    const startRun = (effect: Effect | null) => {
+      if (runs.length && runEffect === effect) return;
+      runEffect = effect;
+      runs.push({ effect, start: count, count: 0 });
+    };
     const push = (rect: Rect, slot: AtlasSlot | null) => {
+      startRun(null);
+      runs[runs.length - 1].count++;
       const offset = count++ * FLOATS_PER_INSTANCE;
       data[offset] = rect.x;
       data[offset + 1] = rect.y;
@@ -831,10 +848,37 @@ export async function createGpuCanvas(
       } else {
         data[offset + 9] = 1;
       }
+      data[offset + 10] = 0;
+    };
+    /** A node drawn by its effect: the whole snapshot, padded, with its parameters. */
+    const pushEffect = (
+      node: Node,
+      slot: AtlasSlot,
+      worn: { effect: Effect; params: number[]; pad: number },
+    ) => {
+      startRun(worn.effect);
+      runs[runs.length - 1].count++;
+      const offset = count++ * FLOATS_PER_INSTANCE;
+      const { rect } = node;
+      data[offset] = rect.x;
+      data[offset + 1] = rect.y;
+      data[offset + 2] = rect.width;
+      data[offset + 3] = rect.height;
+      atlas.touch(slot.layer);
+      data[offset + 4] = slot.x;
+      data[offset + 5] = slot.y;
+      data[offset + 6] = slot.x + slot.width;
+      data[offset + 7] = slot.y + slot.height;
+      data[offset + 8] = slot.layer;
+      data[offset + 9] = 0;
+      data[offset + 10] = worn.pad;
+      data.set(worn.params, offset + 12);
     };
     const pushRing = (element: Element, color: number[], width: number) => {
       const rect = ringRect(element);
       if (!rect || !intersects(rect, frameView)) return;
+      startRun(null);
+      runs[runs.length - 1].count++;
       const offset = count++ * FLOATS_PER_INSTANCE;
       data[offset] = rect.x;
       data[offset + 1] = rect.y;
@@ -863,6 +907,15 @@ export async function createGpuCanvas(
       if (before === 3 && shown === 2) stats.lostDetail++;
       node.shown = shown;
       node.shownFrame = stats.frames;
+      const worn = effects.size ? effects.get(node.element) : undefined;
+      if (worn) {
+        if (worn.effect.animated) effectsMoving = true;
+        if (base && renderer.hasEffect(worn.effect)) {
+          pushEffect(node, base, worn);
+          continue;
+        }
+        effectsMoving = true;
+      }
       push(node.rect, base);
       // Back to front: stale tiles and tiles from an earlier zoom, the preview of a change,
       // then this zoom's fresh tiles.
@@ -879,7 +932,8 @@ export async function createGpuCanvas(
     if (hovered && !selection.has(hovered)) pushRing(hovered, hoverColor, HOVER_WIDTH);
     const cssWidth = canvas.clientWidth;
     const dpr = canvas.width / Math.max(1, cssWidth);
-    renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count);
+    const time = (performance.now() - startedAt) / 1000;
+    renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count, time, runs);
   };
 
   /**
@@ -935,7 +989,7 @@ export async function createGpuCanvas(
     stats.visible = visible.length;
     stats.pending = pending;
     stats.frameMs = performance.now() - start;
-    if (pending > 0) schedule();
+    if (pending > 0 || effectsMoving) schedule();
   };
 
   /** A frame asked for this paint event; others come from content animating on its own. */
@@ -1330,6 +1384,7 @@ export async function createGpuCanvas(
       if (lingering === node) lingering = null;
       if (focused === node) focused = null;
       transitioning.delete(node);
+      effects.delete(element);
       selection.delete(element);
       nodes.delete(element);
       releaseNode(node);
@@ -1365,6 +1420,14 @@ export async function createGpuCanvas(
       if (element === hovered) return;
       hovered = element;
       ringRects.clear();
+      schedule();
+    },
+    setEffect(element, effect, params) {
+      if (!nodes.has(element)) return;
+      if (effect) {
+        const values = effectParams(effect, params);
+        effects.set(element, { effect, params: values, pad: effectPad(effect, values) });
+      } else effects.delete(element);
       schedule();
     },
     screenToWorld: (point) => screenToWorld(camera, point),

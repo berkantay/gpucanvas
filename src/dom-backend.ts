@@ -9,6 +9,7 @@ import {
   type Camera,
   type Rect,
 } from './camera';
+import { effectParams, type Effect } from './effects';
 import { elementInNode, nodeOfElement, rectInNode } from './elements';
 import { applyNodeBase, applyNodeSize, boundsOf } from './node-style';
 import {
@@ -116,6 +117,31 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     }
     if (boxes.size && !boxFrame) placeBoxes();
   };
+  /** Animated CSS looks, run by the browser as filter animations. */
+  const animations = new Map<HTMLElement, Animation>();
+  const KEYFRAMES = 24;
+  const clearEffect = (element: HTMLElement) => {
+    animations.get(element)?.cancel();
+    animations.delete(element);
+    element.style.filter = '';
+  };
+  const applyEffect = (element: HTMLElement, effect: Effect | null, params?: ArrayLike<number>) => {
+    clearEffect(element);
+    if (!effect?.css) return;
+    const values = effectParams(effect, params);
+    if (!effect.animated) {
+      element.style.filter = effect.css(values, 0);
+      return;
+    }
+    const period = effect.period ?? 4;
+    const keyframes = Array.from({ length: KEYFRAMES + 1 }, (_, i) => ({
+      filter: effect.css!(values, (i / KEYFRAMES) * period),
+    }));
+    animations.set(
+      element,
+      element.animate(keyframes, { duration: period * 1000, iterations: Infinity }),
+    );
+  };
   let camera = options.camera ?? DEFAULT_CAMERA;
   let frameMs = 0;
 
@@ -150,6 +176,7 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
       applyNodeSize(element, rect);
     },
     removeNode(element) {
+      clearEffect(element);
       nodes.delete(element);
       outlinedNodes.delete(element);
       element.style.outline = '';
@@ -175,6 +202,9 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
       if (element === hovered) return;
       hovered = element;
       drawOutlines();
+    },
+    setEffect(element, effect, params) {
+      if (nodes.has(element)) applyEffect(element, effect, params);
     },
     getCamera: () => camera,
     setCamera,

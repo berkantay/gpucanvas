@@ -15,6 +15,7 @@ import {
   type Editor,
   type EditorOptions,
   type EditorPick,
+  type Effect,
   type GpuCanvas as GpuCanvasInstance,
   type GpuCanvasOptions,
   type Layer,
@@ -68,10 +69,24 @@ export interface CanvasNodeProps {
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
+  /** A shader the node is drawn through, such as `effects.glow`. */
+  effect?: Effect | null;
+  /** Up to four parameters for `effect`; its defaults otherwise. */
+  effectParams?: readonly number[];
 }
 
 /** A live DOM node placed on the canvas in world units. Events, focus and state work as usual. */
-export function CanvasNode({ x, y, width, height, children, className, style }: CanvasNodeProps) {
+export function CanvasNode({
+  x,
+  y,
+  width,
+  height,
+  children,
+  className,
+  style,
+  effect = null,
+  effectParams,
+}: CanvasNodeProps) {
   const canvas = useContext(CanvasContext);
   if (!canvas) throw new Error('<CanvasNode> must be inside <GpuCanvas>');
   const [element] = useState(() => document.createElement('div'));
@@ -91,6 +106,12 @@ export function CanvasNode({ x, y, width, height, children, className, style }: 
   useLayoutEffect(() => {
     element.className = className ?? '';
   }, [element, className]);
+
+  const paramsKey = effectParams?.join(',');
+  useLayoutEffect(() => {
+    canvas.setEffect(element, effect, effectParams);
+    // The parameters' values, not the array's identity, decide a redraw.
+  }, [canvas, element, effect, paramsKey]);
 
   return createPortal(
     <div style={{ width: '100%', height: '100%', ...style }}>{children}</div>,

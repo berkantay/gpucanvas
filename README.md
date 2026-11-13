@@ -113,6 +113,48 @@ Colors are the `selectionColor` and `hoverColor` options. The demo picks React c
 `?pick=element` or `?pick=node` picks elements or whole screens, and `?edit=0` leaves clicks to
 the components.
 
+## Shader effects
+
+Components stay live DOM, and the GPU draws them through a shader. One call per node:
+
+```ts
+import { effects } from 'gpucanvas';
+
+canvas.setEffect(node, effects.ripple); // the effect's default parameters
+canvas.setEffect(node, effects.glow, [1, 0.4, 0.2, 32]); // orange, 32 px reach
+canvas.setEffect(node, null); // back to plain
+```
+
+Built in: `glow`, `hue`, `ripple`, `blur`, `pixelate`, `grayscale`, and `dissolve` for a node
+leaving or arriving (its parameter is the progress, 0 to 1). Animated effects draw every frame
+while their node is in view; the others cost nothing once drawn.
+
+Your own is a WGSL function over the node's pixels:
+
+```ts
+import { defineEffect } from 'gpucanvas';
+
+const scanlines = defineEffect({
+  name: 'scanlines',
+  animated: true,
+  params: [3], // line spacing in CSS pixels
+  wgsl: /* wgsl */ `
+    fn effect(input: EffectInput) -> vec4f {
+      let color = source(input.uv);
+      let y = input.uv.y * input.size.y + input.time * 20.0;
+      return color * (0.85 + 0.15 * step(0.5, fract(y / input.params.x)));
+    }`,
+});
+```
+
+`EffectInput` has `uv` (0 to 1 across the node), `size` in CSS pixels, `time` in seconds,
+`zoom` and the four `params`. `source(uv)` reads the node's pixels, premultiplied, and is
+transparent outside it. An effect that draws past its node, like a glow, declares how far with
+`pad`. Effects read the node's whole snapshot, so very close in they are softer than plain nodes.
+
+The DOM backend shows effects that have a `css` look as a CSS `filter` (animated ones as filter
+animations) and the rest as plain nodes. The demo's toolbar puts one effect on every component.
+
 ## Run the demo
 
 ```sh

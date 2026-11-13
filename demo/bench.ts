@@ -16,6 +16,8 @@ export interface BenchResult {
   at: number;
   /** What the session did and when, in ms from its start, with the screen point of each action. */
   log?: BenchEvent[];
+  /** The shader effect every component wore, when one did. */
+  effect?: string;
 }
 
 export interface BenchEvent {
@@ -422,7 +424,11 @@ export function flyTo(canvas: Stage, target: Camera, duration = 1400): Promise<v
 
 const STORAGE_KEY = 'gpucanvas.bench';
 
-/** Latest result per node count and mode, kept across the reloads a mode switch needs. */
+/** Where a result is kept: per node count, mode and effect. */
+export const resultKey = (nodes: number, mode: string, effect?: string | null) =>
+  effect ? `${nodes}:${mode}:${effect}` : `${nodes}:${mode}`;
+
+/** Latest result per node count, mode and effect, kept across the reloads a mode switch needs. */
 export function loadResults(): Record<string, BenchResult> {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
@@ -433,7 +439,7 @@ export function loadResults(): Record<string, BenchResult> {
 
 export function saveResult(result: BenchResult) {
   const results = loadResults();
-  results[`${result.nodes}:${result.mode}`] = result;
+  results[resultKey(result.nodes, result.mode, result.effect)] = result;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
   } catch {
