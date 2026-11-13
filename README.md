@@ -1,14 +1,32 @@
 # gpucanvas
 
-Put thousands of live DOM nodes on an infinite canvas and let the GPU pan and zoom them.
+Put thousands of live DOM nodes on an infinite canvas: the GPU draws them, an editor selects,
+moves and resizes them, and shaders run on them.
 
 ![The same 5,000 live React screens as plain DOM (left) and in gpucanvas (right), with each side's frame rate measured live](docs/benchmark.gif)
 
 The same session on both sides: 5,000 live React screens, the same camera path, a message typed and sent. Left, every screen is plain DOM under a CSS transform. Right, gpucanvas. Recorded in Chrome on a MacBook Pro; the frame rates are measured live in each run. Run it yourself in the [live demo](https://berkantay.github.io/gpucanvas/).
 
+- **[Canvas](#how-it-works).** Live React or plain DOM nodes, drawn by WebGPU in one instanced
+  pass. Pan and zoom never touch the DOM, and clicks, typing and state still reach the real
+  elements.
+- **[Editor](#editing).** Click to select, double-click to go a layer deeper, down to any element
+  or React component. Move and resize with snapping guides.
+- **[Shader effects](#shader-effects).** Run WGSL on live components: a glass lens, frost,
+  shockwaves, glitch, VHS, or your own.
+
 ## Try it
 
-Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or later. Thirty agent cursors build the first view, then the camera pulls out to all 5,000 screens. Press `b` to run the benchmark tour.
+Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)** in Chrome 157 or
+later. Thirty agent cursors build the first view, then the camera pulls out to all 5,000 screens.
+
+- Click a screen to select it, double-click to go deeper, drag to move it.
+- Pick a shader effect in the toolbar, or open one directly:
+  [glass](https://berkantay.github.io/gpucanvas/?effect=glass),
+  [shockwave](https://berkantay.github.io/gpucanvas/?effect=shockwave) (click anywhere),
+  [frost](https://berkantay.github.io/gpucanvas/?effect=frost),
+  [glitch](https://berkantay.github.io/gpucanvas/?effect=glitch).
+- Press `b` to run the benchmark tour.
 
 The GPU path needs HTML-in-Canvas, which is behind a flag:
 
@@ -158,8 +176,10 @@ const scanlines = defineEffect({
 `EffectInput` has `uv` (0 to 1 across the node), `size` in CSS pixels, `time` in seconds,
 `zoom`, the four `params`, the `pointer` and the last `press` in the node's uv, and
 `sincePress` in seconds. `source(uv)` reads the node's pixels, premultiplied, and is
-transparent outside it; `hash` and `noise` give random values. An effect that draws past its node, like a glow, declares how far with
-`pad`. Effects read the node's whole snapshot, so very close in they are softer than plain nodes.
+transparent outside it; `hash` and `noise` give random values. An effect that draws past its
+node, like a glow, declares how far with `pad`. Effects read the node's whole snapshot, so very
+close in they are softer than plain nodes. In React, `<CanvasNode effect={effects.glass}>` does
+the same.
 
 The DOM backend shows effects that have a `css` look as a CSS `filter` (animated ones as filter
 animations) and the rest as plain nodes. The demo's toolbar puts one effect on every component.
@@ -170,6 +190,12 @@ animations) and the rest as plain nodes. The demo's toolbar puts one effect on e
 bun install
 bun run dev        # http://localhost:5199/?mode=gpu&n=10000  (mode: auto | gpu | dom)
 ```
+
+## Releases
+
+Publishing a GitHub release for a `vX.Y.Z` tag that matches `package.json` publishes the package
+to npm from GitHub Actions, with provenance, through npm trusted publishing. See
+[release.yml](.github/workflows/release.yml).
 
 ## How it works
 
@@ -186,7 +212,8 @@ bun run dev        # http://localhost:5199/?mode=gpu&n=10000  (mode: auto | gpu 
 4. **Tiles up close.** Past 100% zoom on a 2x display, only the visible part of a node is
    rasterized, as sharp tiles, center first. While its content animates, one half-resolution preview stands in.
 5. **One draw call.** Each frame culls nodes against the view and draws every visible one with
-   one instanced quad draw. Panning and zooming never touch the DOM. Raster work has a
+   one instanced quad draw, or one per run of nodes sharing a shader effect. Panning and zooming
+   never touch the DOM. Raster work has a
    per-frame budget, so the camera stays smooth while pixels fill in.
 6. **Live updates.** A MutationObserver marks a node dirty when its content changes, and
    loading images, web fonts and CSS transitions trigger a redraw. Animated content on nodes
@@ -235,6 +262,8 @@ DOM is the same screens in one CSS-transformed container, which is also the fall
 
 ## Next
 
+- **Snapshots as data.** Every node is already a texture: export it as an image without a
+  headless browser, diff two versions of a screen on the GPU, keep a filmstrip of its history.
 - **Keyboard and accessibility.** Parked pages use `content-visibility: hidden`, so Tab skips
   their nodes. A focused node already stays live; moving focus across pages needs a focus model.
 - **Workers.** Composite in a worker with `captureElementImage`, and drive culling from the GPU.
