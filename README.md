@@ -18,6 +18,8 @@ The same session on both sides: 5,000 live React screens, the same camera path, 
   filmstrip of its history.
 - **[Agent view](#agent-view).** What is on the canvas as a short JSON tree with ids, and an
   image of any region, for an AI agent to read and point at.
+- **[Transitions](#transitions).** Dissolve, wipe or fade a node out and another in, on the
+  GPU, while both stay live.
 - **[Marks](#marks).** Arrows between elements, comment pins, notes and live cursors that
   follow the camera.
 
@@ -238,6 +240,26 @@ await view.capture({ x: 0, y: 0, width: 4000, height: 3000 }, { scale: 0.25 }); 
 Wrappers that add nothing are left out, so a sign-in screen is about 35 entries and 3.5 KB of
 JSON, read in 3 ms. Pass `rect` to read another region and `name` to label elements with your
 own names, such as their React component's. `capture` needs the GPU backend.
+
+## Transitions
+
+Any effect whose first parameter is progress (0 whole, 1 gone) animates as a transition:
+`dissolve`, `wipe` and `fade` are built in.
+
+```ts
+import { animateEffect, effects, swapNodes } from 'gpucanvas';
+
+await animateEffect(canvas, node, effects.wipe, { duration: 600, params: [90] }); // wipe downward
+await animateEffect(canvas, node, effects.wipe, { from: 1, to: 0 }); // and back
+
+// One screen burns away while the next appears in its place.
+await swapNodes(canvas, oldScreen, newScreen, { effect: effects.dissolve, duration: 800 });
+canvas.removeNode(oldScreen);
+```
+
+A node that ends whole loses the effect; one that ends gone stays hidden until it is removed.
+Starting another animation on a node replaces the running one, which resolves `false`. In the
+demo, select a screen and press `D` to dissolve it or `W` to wipe it. The DOM backend fades.
 
 ## Marks
 

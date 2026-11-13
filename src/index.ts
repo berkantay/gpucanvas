@@ -15,6 +15,8 @@ export type { CursorMark, Mark, Marks } from './marks';
 export { createMarks } from './marks';
 export type { Filmstrip, FilmstripFrame, ImageDiff } from './snapshots';
 export { diffImages, recordFilmstrip, toBlob } from './snapshots';
+export type { AnimateEffectOptions, Easing } from './transitions';
+export { animateEffect, easeInOut, swapNodes } from './transitions';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
 export { supportsGpuCanvas };
 

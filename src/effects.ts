@@ -206,6 +206,40 @@ fn effect(input: EffectInput) -> vec4f {
   css: ([progress]) => `opacity(${1 - progress})`,
 });
 
+/** Fades out. Parameters: progress, 0 (whole) to 1 (gone). */
+export const fade = defineEffect({
+  name: 'fade',
+  params: [0.5],
+  wgsl: /* wgsl */ `
+fn effect(input: EffectInput) -> vec4f {
+  return source(input.uv) * (1.0 - input.params.x);
+}`,
+  css: ([progress]) => `opacity(${1 - progress})`,
+});
+
+/**
+ * Wipes away with a soft edge. Parameters: progress, 0 (whole) to 1 (gone); the direction it
+ * wipes toward in degrees, 0 for left to right (default 0); the edge's softness in CSS pixels
+ * (default 32).
+ */
+export const wipe = defineEffect({
+  name: 'wipe',
+  params: [0.5, 0, 32],
+  wgsl: /* wgsl */ `
+fn effect(input: EffectInput) -> vec4f {
+  let angle = radians(input.params.y);
+  let toward = vec2f(cos(angle), sin(angle));
+  let half = input.size * 0.5;
+  let extent = abs(toward.x) * half.x + abs(toward.y) * half.y;
+  // 0 where the wipe starts, 1 where it ends.
+  let along = (dot(input.uv * input.size - half, toward) / extent + 1.0) * 0.5;
+  let soft = max(input.params.z, 0.5) / (2.0 * extent);
+  let edge = input.params.x * (1.0 + soft);
+  return source(input.uv) * smoothstep(edge - soft, edge, along);
+}`,
+  css: ([progress]) => `opacity(${1 - progress})`,
+});
+
 /**
  * A glass lens that follows the pointer, magnifying what is under it with a colored rim.
  * Parameters: radius in CSS pixels and magnification (default 110, 1.8).
@@ -404,5 +438,7 @@ export const EFFECTS = {
   blur,
   pixelate,
   dissolve,
+  fade,
+  wipe,
   grayscale,
 } as const;

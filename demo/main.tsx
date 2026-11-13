@@ -4,13 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import {
+  animateEffect,
   bindEditor,
   createAgentView,
   createMarks,
+  effects,
   fitCamera,
   supportsGpuCanvas,
   toBlob,
   type AgentView,
+  type Effect,
   type GpuCanvas as GpuCanvasInstance,
   type Marks,
   type EditorOptions,
@@ -186,6 +189,15 @@ const isTyping = () =>
   document.activeElement instanceof HTMLTextAreaElement ||
   (document.activeElement as HTMLElement | null)?.isContentEditable === true;
 
+/** Takes a node away through a transition and brings it back, then restores the toolbar effect. */
+async function playTransition(canvas: GpuCanvasInstance, node: HTMLElement, effect: Effect) {
+  if (!(await animateEffect(canvas, node, effect, { duration: 900 }))) return;
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  if (!(await animateEffect(canvas, node, effect, { from: 1, to: 0, duration: 900 }))) return;
+  const toolbar = parseEffect(new URLSearchParams(location.search).get('effect'));
+  if (toolbar) canvas.setEffect(node, DEMO_EFFECTS[toolbar].effect);
+}
+
 async function saveSnapshot(canvas: GpuCanvasInstance, node: HTMLElement) {
   const image = await canvas.snapshot(node, { scale: 2 }).catch(() => null);
   if (!image) return;
@@ -302,12 +314,15 @@ function App() {
       trigger: EDIT ? 'click' : 'shift-click',
       onTransform: EDIT ? (event) => applyTransform(gpucanvas, event) : undefined,
     });
-    // S saves the selected screen, or whatever is selected inside it, as a PNG.
+    // S saves the selected screen as a PNG. D dissolves it out and back in, W wipes it.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 's' || event.metaKey || event.ctrlKey || isTyping()) return;
+      if (event.metaKey || event.ctrlKey || isTyping()) return;
       const first = editor.get()[0]?.[0];
       const node = first && gpucanvas.getNodeOf(first);
-      if (node) saveSnapshot(gpucanvas, node);
+      if (!node) return;
+      if (event.key === 's') saveSnapshot(gpucanvas, node);
+      if (event.key === 'd') playTransition(gpucanvas, node, effects.dissolve);
+      if (event.key === 'w') playTransition(gpucanvas, node, effects.wipe);
     };
     window.addEventListener('keydown', onKey);
     return () => {
