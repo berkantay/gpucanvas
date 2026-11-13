@@ -35,6 +35,7 @@ import {
 import { startAgents, type Agents } from './agents';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
+import { FLOW_EVENT, toast } from './ui';
 
 const params = new URLSearchParams(location.search);
 const gpuSupported = supportsGpuCanvas();
@@ -360,6 +361,50 @@ function App() {
       editor.destroy();
     };
   }, [gpucanvas, edit, pick]);
+
+  // Back, Continue and the like move the camera to the neighboring screen in the same row.
+  useEffect(() => {
+    if (!gpucanvas) return;
+    const onFlow = (event: Event) => {
+      const from = gpucanvas.getNodeOf(event.target as Element);
+      const rect = from && gpucanvas.getNodeRect(from);
+      if (!rect) return;
+      const step = (event as CustomEvent<number>).detail;
+      const row = rect.y + rect.height / 2;
+      const search = {
+        x: step > 0 ? rect.x + rect.width : rect.x - rect.width * 3,
+        y: rect.y - rect.height,
+        width: rect.width * 3,
+        height: rect.height * 3,
+      };
+      let next: typeof rect | null = null;
+      for (const node of gpucanvas.getNodesIn(search)) {
+        const r = gpucanvas.getNodeRect(node);
+        if (!r || node === from || !node.querySelector('.brand')) continue;
+        if (Math.abs(r.y + r.height / 2 - row) > rect.height / 2) continue;
+        if (
+          (r.x - rect.x) * step > 0 &&
+          (!next || Math.abs(r.x - rect.x) < Math.abs(next.x - rect.x))
+        )
+          next = r;
+      }
+      if (!next)
+        return void toast(event.target!, step > 0 ? 'Last screen in this flow' : 'First screen');
+      const { zoom } = gpucanvas.getCamera();
+      const { clientWidth: w, clientHeight: h } = gpucanvas.surface;
+      flyTo(
+        gpucanvas,
+        {
+          x: next.x + next.width / 2 - w / 2 / zoom,
+          y: next.y + next.height / 2 - h / 2 / zoom,
+          zoom,
+        },
+        700,
+      );
+    };
+    document.addEventListener(FLOW_EVENT, onFlow);
+    return () => document.removeEventListener(FLOW_EVENT, onFlow);
+  }, [gpucanvas]);
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;

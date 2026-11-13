@@ -144,6 +144,7 @@ function Picture({ variant }: { variant: number }) {
 
 function Announcement() {
   const [open, setOpen] = useState(true);
+  const [more, setMore] = useState(false);
   if (!open) return null;
   return (
     <div className={cx('flex h-full flex-col gap-2 p-4', SURFACE)}>
@@ -161,7 +162,19 @@ function Announcement() {
       <p className="text-body-2-regular text-text-secondary">
         Carousel and one time code inputs are ready to drop in today.
       </p>
-      <button className="mt-auto w-fit text-body-2-medium text-text-link">See what's new</button>
+      {more ? (
+        <ul className="mt-auto list-disc ps-4 text-body-2-regular text-text-secondary">
+          <li>Carousel: swipe, arrows and autoplay</li>
+          <li>One time code: paste fills every box</li>
+        </ul>
+      ) : (
+        <button
+          className="mt-auto w-fit text-body-2-medium text-text-link"
+          onClick={() => setMore(true)}
+        >
+          See what's new
+        </button>
+      )}
     </div>
   );
 }
@@ -200,6 +213,7 @@ function Stat() {
 
 function Menu() {
   const [name, src] = pick(PEOPLE, 2);
+  const [active, setActive] = useState('Profile');
   return (
     <div className={cx('flex h-full flex-col p-2.5', SURFACE)}>
       <div className="flex items-center gap-3 p-2">
@@ -220,7 +234,13 @@ function Menu() {
       ).map(([Glyph, label]) => (
         <button
           key={label}
-          className="flex h-9 items-center gap-2.5 rounded-lg px-2 text-body-2-regular text-text-secondary hover:bg-background-secondary-default"
+          onClick={() => setActive(label)}
+          className={cx(
+            'flex h-9 items-center gap-2.5 rounded-lg px-2 text-body-2-regular hover:bg-background-secondary-default',
+            label === active
+              ? 'bg-background-secondary-default text-text-primary'
+              : 'text-text-secondary',
+          )}
         >
           <Glyph className="size-[18px]" /> {label}
         </button>

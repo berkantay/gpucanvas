@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   RiAddLine,
   RiAppleFill,
@@ -17,7 +17,6 @@ import {
   RiMapPin2Line,
   RiMessage3Line,
   RiMore2Line,
-  RiNotification3Line,
   RiPauseFill,
   RiPlayFill,
   RiSearchLine,
@@ -38,10 +37,13 @@ import {
   Chip,
   cx,
   Divider,
+  flow,
   IconButton,
   Input,
+  MenuButton,
   MonthCalendar,
   Notification,
+  NotificationsButton,
   SegmentedControl,
   SegmentedControlItem,
   Select,
@@ -59,6 +61,8 @@ import {
   Tabs,
   Textarea,
   Thinking,
+  toast,
+  ToastHost,
   type Day,
 } from './ui';
 import { PEOPLE, type Entry, type Product } from './products';
@@ -258,6 +262,32 @@ function Status({ entry }: { entry: Entry }) {
   );
 }
 
+/** Downloads `entries` as a CSV file, the way an Export button would. */
+function downloadCsv(name: string, entries: Entry[]) {
+  const rows = [
+    ['Name', 'Details', 'Status', 'Value'],
+    ...entries.map((e) => [e.title, e.sub, e.status, e.value]),
+  ];
+  const csv = rows
+    .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(','))
+    .join('\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  link.download = `${name.toLowerCase().replaceAll(' ', '-')}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+/** The bell's latest few, from the product's own entries. */
+const notificationsOf = (product: Product, seed: number) =>
+  rotate(product.entries, seed + 1)
+    .slice(0, 4)
+    .map((entry, i) => ({
+      title: `${entry.title}: ${entry.status.toLowerCase()}`,
+      description: entry.sub,
+      time: `${(i + 1) * 7}m`,
+    }));
+
 /** A cover from the product's pictures, or a brand gradient when it runs out. */
 function Cover({
   product,
@@ -355,7 +385,7 @@ function AppPage({
           </div>
           <div className="ms-auto flex items-center gap-2">
             {actions}
-            <IconButton icon={RiNotification3Line} aria-label="Notifications" />
+            <NotificationsButton items={notificationsOf(product, active)} />
           </div>
         </header>
         {children}
@@ -450,7 +480,10 @@ function Dashboard({ product, seed }: Props) {
 }
 
 function ListPage({ product, seed }: Props) {
-  const entries = rotate(product.entries, seed);
+  const [entries, setEntries] = useState(() => rotate(product.entries, seed));
+  const [status, setStatus] = useState<string | null>(null);
+  const statuses = [...new Set(entries.map((entry) => entry.status))];
+  const shown = status ? entries.filter((entry) => entry.status === status) : entries;
   return (
     <AppPage
       product={product}
@@ -458,10 +491,34 @@ function ListPage({ product, seed }: Props) {
       title={product.things}
       actions={
         <>
-          <Button variant="secondary" leadingIcon={RiDownloadLine}>
+          <Button
+            variant="secondary"
+            leadingIcon={RiDownloadLine}
+            onClick={(event) => {
+              downloadCsv(product.things, shown);
+              toast(event.currentTarget, `Exported ${shown.length} rows`);
+            }}
+          >
             Export
           </Button>
-          <Button leadingIcon={RiAddLine}>New</Button>
+          <Button
+            leadingIcon={RiAddLine}
+            onClick={() => {
+              setStatus(null);
+              setEntries((all) => [
+                {
+                  title: `Untitled ${all.length - product.entries.length + 1}`,
+                  sub: 'Just now',
+                  value: '-',
+                  status: 'Draft',
+                  tone: 'gray',
+                },
+                ...all,
+              ]);
+            }}
+          >
+            New
+          </Button>
         </>
       }
     >
@@ -482,9 +539,15 @@ function ListPage({ product, seed }: Props) {
             placeholder={`Search ${product.things.toLowerCase()}`}
             leadingIcon={RiSearchLine}
           />
-          <Button variant="ghost" leadingIcon={RiFilter3Line}>
-            Filters
-          </Button>
+          <MenuButton
+            icon={RiFilter3Line}
+            aria-label="Filter by status"
+            items={[null, ...statuses].map((value) => ({
+              label: value ?? 'All statuses',
+              selected: value === status,
+              onSelect: () => setStatus(value),
+            }))}
+          />
         </div>
       </div>
       <Table aria-label={product.things}>
@@ -498,7 +561,7 @@ function ListPage({ product, seed }: Props) {
           <TableColumn id="value">Value</TableColumn>
         </TableHeader>
         <TableBody>
-          {entries.map((entry, index) => {
+          {shown.map((entry, index) => {
             const [name, src] = PEOPLE[(seed + index) % PEOPLE.length];
             return (
               <TableRow key={entry.title} id={entry.title}>
@@ -649,8 +712,10 @@ function Detail({ product, seed }: Props) {
           </span>
         ))}
         <div className="ms-auto flex gap-2">
-          <Button variant="secondary">Sign in</Button>
-          <Button>Get started</Button>
+          <Button variant="secondary" onClick={flow(1)}>
+            Sign in
+          </Button>
+          <Button onClick={flow(1)}>Get started</Button>
         </div>
       </nav>
       <div className="grid flex-1 grid-cols-[1fr_380px] gap-10 p-10">
@@ -676,7 +741,14 @@ function Detail({ product, seed }: Props) {
               </span>
             </div>
             <div className="ms-auto flex gap-2">
-              <IconButton icon={RiShareLine} aria-label="Share" />
+              <IconButton
+                icon={RiShareLine}
+                aria-label="Share"
+                onClick={(event) => {
+                  void navigator.clipboard?.writeText(location.href).catch(() => {});
+                  toast(event.currentTarget, 'Link copied');
+                }}
+              />
               <IconButton
                 icon={saved ? RiHeartFill : RiHeartLine}
                 aria-label="Save"
@@ -703,8 +775,8 @@ function Detail({ product, seed }: Props) {
               <RiCheckLine className="size-4 text-accent-500" /> {feature}
             </span>
           ))}
-          <Button>Continue</Button>
-          <Button variant="secondary" leadingIcon={RiMessage3Line}>
+          <Button onClick={flow(1)}>Continue</Button>
+          <Button variant="secondary" leadingIcon={RiMessage3Line} onClick={flow(1)}>
             Ask a question
           </Button>
         </div>
@@ -724,8 +796,10 @@ function Landing({ product, seed }: Props) {
           </span>
         ))}
         <div className="ms-auto flex gap-2">
-          <Button variant="ghost">Log in</Button>
-          <Button>Start free</Button>
+          <Button variant="ghost" onClick={flow(1)}>
+            Log in
+          </Button>
+          <Button onClick={flow(1)}>Start free</Button>
         </div>
       </nav>
       <section className="relative flex flex-col items-center gap-6 px-12 pt-14 text-center">
@@ -744,8 +818,12 @@ function Landing({ product, seed }: Props) {
           so you spend less time on busywork.
         </p>
         <div className="relative flex gap-3">
-          <Button trailingIcon={RiArrowRightLine}>Get started</Button>
-          <Button variant="secondary">Book a demo</Button>
+          <Button trailingIcon={RiArrowRightLine} onClick={flow(1)}>
+            Get started
+          </Button>
+          <Button variant="secondary" onClick={flow(1)}>
+            Book a demo
+          </Button>
         </div>
         <div className="relative mt-6 grid w-full max-w-[1100px] grid-cols-3 gap-4 text-start">
           {product.features.slice(0, 3).map((feature, i) => (
@@ -777,6 +855,7 @@ function Landing({ product, seed }: Props) {
 function Pricing({ product, seed }: Props) {
   const [yearly, setYearly] = useState(new Set(['yearly']));
   const annual = yearly.has('yearly');
+  const [plan, setPlan] = useState<number | null>(null);
   const tiers = [
     ['Starter', 0, 'For trying it out'],
     ['Pro', 12 + (seed % 8), 'For growing teams'],
@@ -819,8 +898,15 @@ function Pricing({ product, seed }: Props) {
               ${annual ? Math.round(price * 0.83) : price}
               <span className="text-body-regular text-text-tertiary"> / seat / month</span>
             </span>
-            <Button variant={i === 1 ? 'primary' : 'secondary'}>
-              {i === 0 ? 'Start free' : `Choose ${name}`}
+            <Button
+              variant={i === 1 ? 'primary' : 'secondary'}
+              leadingIcon={plan === i ? RiCheckLine : undefined}
+              onClick={(event) => {
+                setPlan(i);
+                toast(event.currentTarget, `${name} plan selected`);
+              }}
+            >
+              {plan === i ? 'Your plan' : i === 0 ? 'Start free' : `Choose ${name}`}
             </Button>
             <Divider />
             {product.features.slice(0, 2 + i).map((feature) => (
@@ -944,10 +1030,21 @@ function CalendarPage({ product, seed }: Props) {
 }
 
 function SettingsPage({ product, seed }: Props) {
-  const [name, src] = PEOPLE[seed % PEOPLE.length];
+  const [name] = PEOPLE[seed % PEOPLE.length];
+  const [photo, setPhoto] = useState(seed);
+  const src = PEOPLE[photo % PEOPLE.length][1];
   const [toggles, setToggles] = useState([true, false, true]);
   return (
-    <AppPage product={product} active={4} title="Settings" actions={<Button>Save changes</Button>}>
+    <AppPage
+      product={product}
+      active={4}
+      title="Settings"
+      actions={
+        <Button done="Saved" onClick={(event) => toast(event.currentTarget, 'Changes saved')}>
+          Save changes
+        </Button>
+      }
+    >
       <Tabs defaultSelectedKey="profile">
         <TabList aria-label="Settings">
           <Tab id="profile">Profile</Tab>
@@ -966,7 +1063,9 @@ function SettingsPage({ product, seed }: Props) {
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
             <img src={src} alt={name} className="size-16 rounded-full object-cover" />
-            <Button variant="secondary">Change photo</Button>
+            <Button variant="secondary" onClick={() => setPhoto((value) => value + 1)}>
+              Change photo
+            </Button>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Full name" defaultValue={name} />
@@ -1044,7 +1143,14 @@ function Analytics({ product, seed }: Props) {
       active={4}
       title="Reports"
       actions={
-        <Button variant="secondary" leadingIcon={RiDownloadLine}>
+        <Button
+          variant="secondary"
+          leadingIcon={RiDownloadLine}
+          onClick={(event) => {
+            downloadCsv(`${product.name} report`, entries);
+            toast(event.currentTarget, 'Report downloaded');
+          }}
+        >
           Download
         </Button>
       }
@@ -1105,12 +1211,44 @@ function Analytics({ product, seed }: Props) {
 
 function Gallery({ product, seed }: Props) {
   const tiles = Array.from({ length: 9 }, (_, i) => i);
+  const picker = useRef<HTMLInputElement>(null);
+  const [uploads, setUploads] = useState<{ src: string; name: string }[]>([]);
   return (
     <AppPage
       product={product}
       active={2}
       title="Library"
-      actions={<Button leadingIcon={RiAddLine}>Upload</Button>}
+      actions={
+        <>
+          <input
+            ref={picker}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(event) => {
+              const files = [...(event.target.files ?? [])];
+              if (!files.length) return;
+              setUploads((all) =>
+                [
+                  ...files.map((file) => ({ src: URL.createObjectURL(file), name: file.name })),
+                  ...all,
+                ].slice(0, tiles.length),
+              );
+              toast(
+                event.target,
+                files.length === 1
+                  ? `Uploaded ${files[0].name}`
+                  : `Uploaded ${files.length} images`,
+              );
+              event.target.value = '';
+            }}
+          />
+          <Button leadingIcon={RiAddLine} onClick={() => picker.current?.click()}>
+            Upload
+          </Button>
+        </>
+      }
     >
       <div className="grid flex-1 grid-cols-4 grid-rows-3 gap-3">
         {tiles.map((i) => (
@@ -1122,9 +1260,17 @@ function Gallery({ product, seed }: Props) {
               i === 5 && 'col-span-2',
             )}
           >
-            <Cover product={product} seed={seed + i} className="absolute inset-0 size-full" />
+            {uploads[i] ? (
+              <img
+                src={uploads[i].src}
+                alt=""
+                className="absolute inset-0 size-full object-cover"
+              />
+            ) : (
+              <Cover product={product} seed={seed + i} className="absolute inset-0 size-full" />
+            )}
             <span className="absolute bottom-2 left-2 rounded-lg bg-black/45 px-2 py-1 text-caption-1-medium text-white backdrop-blur">
-              {product.entries[(seed + i) % product.entries.length].title}
+              {uploads[i]?.name ?? product.entries[(seed + i) % product.entries.length].title}
             </span>
           </div>
         ))}
@@ -1196,7 +1342,16 @@ function Messages({ product, seed }: Props) {
         <div className="flex items-center gap-3 border-b border-border-button-default px-6 py-4">
           <Avatar size="md" src={src} alt={name} />
           <span className="text-body-semibold text-text-primary">{name}</span>
-          <IconButton className="ms-auto" icon={RiMore2Line} aria-label="More" />
+          <MenuButton
+            className="ms-auto"
+            icon={RiMore2Line}
+            aria-label="More"
+            items={[
+              ['Mark as unread', 'Marked as unread'],
+              ['Mute conversation', 'Conversation muted'],
+              ['Archive', 'Conversation archived'],
+            ].map(([label, done]) => ({ label, onSelect: (target) => toast(target, done) }))}
+          />
         </div>
         <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-hidden p-6">
           <div className="max-w-[60%] shrink-0 rounded-2xl rounded-bl-md bg-background-secondary-default px-4 py-3 text-body-regular text-text-primary">
@@ -1286,7 +1441,7 @@ function Phone({
       <StatusBar />
       {title && (
         <div className="flex items-center gap-2 px-5 pt-2 pb-3">
-          {back && <IconButton icon={RiArrowLeftSLine} aria-label="Back" />}
+          {back && <IconButton icon={RiArrowLeftSLine} aria-label="Back" onClick={flow(-1)} />}
           <h1 className="text-title-2-semibold text-text-primary">{title}</h1>
         </div>
       )}
@@ -1324,7 +1479,7 @@ function PhoneHome({ product, seed }: Props) {
           <span className="text-body-2-regular text-text-tertiary">Hi {name.split(' ')[0]}</span>
           <span className="text-title-2-semibold text-text-primary">{product.name}</span>
         </div>
-        <IconButton icon={RiNotification3Line} aria-label="Notifications" />
+        <NotificationsButton items={notificationsOf(product, seed)} />
       </div>
       <div className="relative flex flex-col gap-1 overflow-hidden rounded-3xl bg-accent-500 p-5 text-white shadow-lg">
         <div className="absolute -end-10 -top-10 size-40 rounded-full bg-white/15" />
@@ -1429,7 +1584,9 @@ function PhoneDetail({ product, seed }: Props) {
             <span className="text-title-3-semibold text-text-primary">{entry.value}</span>
           </div>
           <div className="flex-1">
-            <Button className="w-full">Continue</Button>
+            <Button className="w-full" onClick={flow(1)}>
+              Continue
+            </Button>
           </div>
         </div>
       </div>
@@ -1439,7 +1596,14 @@ function PhoneDetail({ product, seed }: Props) {
 
 function PhoneChat({ product, seed }: Props) {
   const [draft, setDraft] = useState('');
+  const [sent, setSent] = useState<string[]>([]);
   const entry = product.entries[seed % product.entries.length];
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setSent((all) => [...all, text]);
+    setDraft('');
+  };
   return (
     <Phone title={`${product.name} assistant`} back>
       <div className="ms-auto max-w-[80%] rounded-2xl rounded-br-md bg-accent-500 px-4 py-2.5 text-body-regular text-white">
@@ -1453,11 +1617,19 @@ function PhoneChat({ product, seed }: Props) {
         Yes, and show me similar {product.things.toLowerCase()}
       </div>
       <Thinking label={`Looking through your ${product.things.toLowerCase()}`} />
+      {sent.map((text, i) => (
+        <div
+          key={i}
+          className="ms-auto max-w-[80%] shrink-0 rounded-2xl rounded-br-md bg-accent-500 px-4 py-2.5 text-body-regular text-white"
+        >
+          {text}
+        </div>
+      ))}
       <div className="mt-auto flex items-center gap-2">
         <div className="flex-1">
-          <Input placeholder="Ask anything" value={draft} onChange={setDraft} />
+          <Input placeholder="Ask anything" value={draft} onChange={setDraft} onEnter={send} />
         </div>
-        <IconButton icon={RiArrowUpLine} aria-label="Send" />
+        <IconButton icon={RiArrowUpLine} aria-label="Send" onClick={send} />
       </div>
     </Phone>
   );
@@ -1503,7 +1675,9 @@ function PhoneProfile({ product, seed }: Props) {
           </label>
         ))}
       </div>
-      <Button variant="secondary">Sign out</Button>
+      <Button variant="secondary" onClick={(event) => toast(event.currentTarget, 'Signed out')}>
+        Sign out
+      </Button>
     </Phone>
   );
 }
@@ -1595,7 +1769,13 @@ function PhoneCheckout({ product, seed }: Props) {
       <Checkbox isSelected={agree} onChange={setAgree}>
         Save for next time
       </Checkbox>
-      <Button leadingIcon={RiAppleFill}>Pay now</Button>
+      <Button
+        leadingIcon={RiAppleFill}
+        done="Paid"
+        onClick={(event) => toast(event.currentTarget, 'Payment complete')}
+      >
+        Pay now
+      </Button>
     </Phone>
   );
 }
@@ -1754,7 +1934,10 @@ function PhoneBooking({ product, seed }: Props) {
           </Button>
         ))}
       </div>
-      <Button>
+      <Button
+        done={`Booked for ${slot}`}
+        onClick={(event) => toast(event.currentTarget, `Booked ${slot} with ${product.name}`)}
+      >
         Book {slot} with {product.name}
       </Button>
     </Phone>
@@ -1784,7 +1967,7 @@ function Frame({
         )}
         style={{ '--brand': product.brand } as CSSProperties}
       >
-        {children}
+        <ToastHost>{children}</ToastHost>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import {
   type ButtonHTMLAttributes,
   type ComponentType,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -29,6 +30,7 @@ import {
   RiGoogleFill,
   RiInformationFill,
   RiNotification3Fill,
+  RiNotification3Line,
 } from '@remixicon/react';
 
 export const cx = (...classes: (string | false | null | undefined)[]) =>
@@ -43,6 +45,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: 'small' | 'medium';
   leadingIcon?: Icon;
   trailingIcon?: Icon;
+  /** Shown with a check for two seconds after a click, like "Saved". */
+  done?: string;
 };
 
 const BUTTON = {
@@ -58,13 +62,30 @@ export function Button({
   size = 'medium',
   leadingIcon: Leading,
   trailingIcon: Trailing,
+  done,
   className,
   children,
+  onClick,
   ...rest
 }: ButtonProps) {
+  const [showDone, setShowDone] = useState(false);
+  useEffect(() => {
+    if (!showDone) return;
+    const timer = setTimeout(() => setShowDone(false), 2000);
+    return () => clearTimeout(timer);
+  }, [showDone]);
+  if (showDone) {
+    Leading = RiCheckLine;
+    Trailing = undefined;
+    children = done;
+  }
   return (
     <button
       {...rest}
+      onClick={(event) => {
+        onClick?.(event);
+        if (done) setShowDone(true);
+      }}
       className={cx(
         'inline-flex shrink-0 items-center justify-center gap-2 rounded-xl font-medium whitespace-nowrap transition-colors',
         size === 'small' ? 'h-9 px-3 text-body-2-medium' : 'h-10 px-4 text-body-2-semibold',
@@ -94,6 +115,202 @@ export function IconButton({
     >
       <Glyph className="size-5" />
     </button>
+  );
+}
+
+/* ----- Actions ------------------------------------------------------------------------------- */
+
+/** Bubbles up to the demo, which moves the camera to the next (1) or previous (-1) screen. */
+export const FLOW_EVENT = 'demo:flow';
+const TOAST_EVENT = 'demo:toast';
+
+export const flow = (step: 1 | -1) => (event: MouseEvent<HTMLElement>) =>
+  event.currentTarget.dispatchEvent(new CustomEvent(FLOW_EVENT, { bubbles: true, detail: step }));
+
+/** Shows `text` in the toast of the screen `from` sits in. */
+export const toast = (from: EventTarget, text: string) =>
+  from.dispatchEvent(new CustomEvent(TOAST_EVENT, { bubbles: true, detail: text }));
+
+/** Shows the toasts raised inside it, along the bottom of its positioned parent. */
+export function ToastHost({ children }: { children: ReactNode }) {
+  const root = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState<{ value: string; id: number } | null>(null);
+  useEffect(() => {
+    const host = root.current!;
+    const show = (event: Event) => {
+      event.stopPropagation();
+      setText({ value: (event as CustomEvent<string>).detail, id: performance.now() });
+    };
+    host.addEventListener(TOAST_EVENT, show);
+    return () => host.removeEventListener(TOAST_EVENT, show);
+  }, []);
+  useEffect(() => {
+    if (!text) return;
+    const timer = setTimeout(() => setText(null), 2200);
+    return () => clearTimeout(timer);
+  }, [text]);
+  return (
+    <div ref={root} className="contents">
+      {children}
+      {text && (
+        <div
+          role="status"
+          className="pointer-events-none absolute inset-x-0 bottom-8 z-40 flex justify-center"
+        >
+          <span className="flex items-center gap-2 rounded-full bg-text-primary px-4 py-2.5 text-body-2-medium text-background-primary-default shadow-lg">
+            <RiCheckboxCircleFill className="size-[18px]" />
+            {text.value}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * An icon button that opens a panel under it. A press outside or Escape closes it; `children`
+ * gets `close` for items that should.
+ */
+export function PopoverButton({
+  icon,
+  'aria-label': label,
+  dot,
+  className,
+  panelClassName,
+  children,
+}: {
+  icon: Icon;
+  'aria-label': string;
+  /** A small accent dot on the button, like unread notifications. */
+  dot?: boolean;
+  className?: string;
+  panelClassName?: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => event.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+  return (
+    <span ref={root} className={cx('relative inline-flex', className)}>
+      <IconButton
+        icon={icon}
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((value) => !value)}
+        className={cx(open && 'bg-background-secondary-default')}
+      />
+      {dot && (
+        <span className="pointer-events-none absolute top-2 right-2 size-2 rounded-full bg-accent-500 ring-2 ring-background-primary-default" />
+      )}
+      {open && (
+        <div
+          className={cx(
+            'absolute top-full right-0 z-30 mt-2 flex flex-col gap-0.5 rounded-xl border border-border-button-default bg-background-primary-default p-1 text-start shadow-dropdown',
+            panelClassName,
+          )}
+        >
+          {children(() => setOpen(false))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** A menu of actions behind an icon button. */
+export function MenuButton({
+  icon,
+  'aria-label': label,
+  className,
+  items,
+}: {
+  icon: Icon;
+  'aria-label': string;
+  className?: string;
+  items: { label: string; selected?: boolean; onSelect: (target: HTMLElement) => void }[];
+}) {
+  return (
+    <PopoverButton icon={icon} aria-label={label} className={className} panelClassName="w-52">
+      {(close) =>
+        items.map((item) => (
+          <button
+            key={item.label}
+            role="menuitem"
+            onClick={(event) => {
+              close();
+              item.onSelect(event.currentTarget);
+            }}
+            className="flex h-9 items-center justify-between gap-3 rounded-lg ps-2.5 pe-2 text-body-2-medium whitespace-nowrap text-text-primary hover:bg-background-secondary-default"
+          >
+            {item.label}
+            {item.selected && <RiCheckLine className="size-4 text-accent-500" />}
+          </button>
+        ))
+      }
+    </PopoverButton>
+  );
+}
+
+/** A bell with an unread dot that opens the latest notifications. */
+export function NotificationsButton({
+  items,
+}: {
+  items: { title: string; description: string; time: string }[];
+}) {
+  const [unread, setUnread] = useState(true);
+  return (
+    <PopoverButton
+      icon={RiNotification3Line}
+      aria-label="Notifications"
+      dot={unread}
+      panelClassName="w-80 p-2"
+    >
+      {(close) => (
+        <>
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="text-body-2-semibold text-text-primary">Notifications</span>
+            <button
+              className="text-caption-1-medium text-text-link"
+              onClick={() => {
+                setUnread(false);
+                close();
+              }}
+            >
+              Mark all as read
+            </button>
+          </div>
+          {items.map((item, i) => (
+            <div key={item.title} className="flex gap-3 rounded-lg px-2 py-2">
+              <span
+                className={cx(
+                  'mt-1.5 size-2 shrink-0 rounded-full',
+                  unread && i < 2 ? 'bg-accent-500' : 'bg-transparent',
+                )}
+              />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-body-2-medium text-text-primary">{item.title}</span>
+                <span className="truncate text-caption-1-regular text-text-tertiary">
+                  {item.description}
+                </span>
+              </div>
+              <span className="text-caption-1-regular text-text-tertiary">{item.time}</span>
+            </div>
+          ))}
+        </>
+      )}
+    </PopoverButton>
   );
 }
 
@@ -267,6 +484,7 @@ export function Input({
   value,
   defaultValue,
   onChange,
+  onEnter,
   leadingIcon: Leading,
   type = 'text',
 }: {
@@ -275,6 +493,7 @@ export function Input({
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
+  onEnter?: () => void;
   leadingIcon?: Icon;
   type?: string;
 }) {
@@ -290,6 +509,7 @@ export function Input({
           value={value}
           defaultValue={defaultValue}
           onChange={(event) => onChange?.(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && onEnter?.()}
           className={cx(FIELD, 'h-10 pe-3', Leading ? 'ps-9' : 'ps-3')}
         />
       </span>
@@ -823,7 +1043,7 @@ export function SignInCard({
         {providers.map((id) => {
           const [Glyph, name] = PROVIDERS[id];
           return (
-            <Button key={id} variant="secondary" leadingIcon={Glyph}>
+            <Button key={id} variant="secondary" leadingIcon={Glyph} onClick={flow(1)}>
               {layout === 'grid' ? name : `Continue with ${name}`}
             </Button>
           );
@@ -841,7 +1061,7 @@ export function SignInCard({
           Keep me signed in
         </Checkbox>
       )}
-      <Button>{mode === 'signin' ? 'Sign in' : 'Create account'}</Button>
+      <Button onClick={flow(1)}>{mode === 'signin' ? 'Sign in' : 'Create account'}</Button>
     </div>
   );
 }
