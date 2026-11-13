@@ -7,6 +7,7 @@ import {
   bindEditor,
   fitCamera,
   supportsGpuCanvas,
+  toBlob,
   type GpuCanvas as GpuCanvasInstance,
   type EditorOptions,
   type TransformEvent,
@@ -173,6 +174,21 @@ function applyTransform(canvas: GpuCanvasInstance, event: TransformEvent) {
   });
 }
 
+const isTyping = () =>
+  document.activeElement instanceof HTMLInputElement ||
+  document.activeElement instanceof HTMLTextAreaElement ||
+  (document.activeElement as HTMLElement | null)?.isContentEditable === true;
+
+async function saveSnapshot(canvas: GpuCanvasInstance, node: HTMLElement) {
+  const image = await canvas.snapshot(node, { scale: 2 }).catch(() => null);
+  if (!image) return;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(await toBlob(image));
+  link.download = 'screen.png';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
 function App() {
   const [canvas, setCanvas] = useState<Stage | null>(null);
   const [agents, setAgents] = useState<Agents | null>(null);
@@ -279,7 +295,18 @@ function App() {
       trigger: EDIT ? 'click' : 'shift-click',
       onTransform: EDIT ? (event) => applyTransform(gpucanvas, event) : undefined,
     });
-    return () => editor.destroy();
+    // S saves the selected screen, or whatever is selected inside it, as a PNG.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 's' || event.metaKey || event.ctrlKey || isTyping()) return;
+      const first = editor.get()[0]?.[0];
+      const node = first && gpucanvas.getNodeOf(first);
+      if (node) saveSnapshot(gpucanvas, node);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      editor.destroy();
+    };
   }, [gpucanvas]);
 
   useEffect(() => {

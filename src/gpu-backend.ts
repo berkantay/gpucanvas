@@ -394,7 +394,16 @@ export async function createGpuCanvas(
 
   /** Readable nodes in view with CSS transitions running, and when the last one ends. */
   const transitioning = new Map<Node, number>();
+  /** Snapshots asked for and not drawn yet. Their pages stay drawable until they are. */
+  const captures: Array<{
+    node: Node;
+    scale: number;
+    resolve: (image: ImageData) => void;
+    reject: (error: Error) => void;
+    tries: number;
+  }> = [];
   const isPinned = (page: Page) =>
+    captures.some((capture) => capture.node.page === page) ||
     live?.page === page ||
     lingering?.page === page ||
     focused?.page === page ||
@@ -1002,7 +1011,74 @@ export async function createGpuCanvas(
 
   /** A frame asked for this paint event; others come from content animating on its own. */
   let awaitingPaint = false;
+  /**
+   * Draws each node waiting for a snapshot into a texture of its own and reads it back. A page
+   * that just became drawable has no snapshot until the next paint event, so a capture may wait
+   * a paint or two.
+   */
+  const drawCaptures = () => {
+    for (const capture of [...captures]) {
+      const { node, scale } = capture;
+      const width = Math.max(1, Math.round(node.rect.width * scale));
+      const height = Math.max(1, Math.round(node.rect.height * scale));
+      const texture = device.createTexture({
+        size: { width, height },
+        format: 'rgba8unorm',
+        usage:
+          GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      try {
+        device.queue.drawElementImageToTexture(
+          {
+            source: node.page.element,
+            sourceX: node.pageX,
+            sourceY: node.pageY,
+            sourceWidth: node.rect.width,
+            sourceHeight: node.rect.height,
+          },
+          { texture, premultipliedAlpha: false },
+        );
+      } catch (error) {
+        texture.destroy();
+        if (++capture.tries > 20) {
+          captures.splice(captures.indexOf(capture), 1);
+          capture.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+        continue;
+      }
+      captures.splice(captures.indexOf(capture), 1);
+      readTexture(texture, width, height).then(capture.resolve, capture.reject);
+    }
+    if (captures.length) {
+      awaitingPaint = true;
+      canvas.requestPaint();
+    } else schedule();
+  };
+  const readTexture = async (texture: GPUTexture, width: number, height: number) => {
+    const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
+    const buffer = device.createBuffer({
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder();
+    encoder.copyTextureToBuffer({ texture }, { buffer, bytesPerRow }, { width, height });
+    device.queue.submit([encoder.finish()]);
+    try {
+      await buffer.mapAsync(GPUMapMode.READ);
+      const rows = new Uint8Array(buffer.getMappedRange());
+      const pixels = new Uint8ClampedArray(width * height * 4);
+      for (let y = 0; y < height; y++) {
+        pixels.set(rows.subarray(y * bytesPerRow, y * bytesPerRow + width * 4), y * width * 4);
+      }
+      return new ImageData(pixels, width, height);
+    } finally {
+      buffer.destroy();
+      texture.destroy();
+    }
+  };
+
   canvas.onpaint = (event) => {
+    if (captures.length) drawCaptures();
     // CSS-only changes (hover, focus rings, transitions) on pinned pages reach us only here.
     let changed = false;
     for (const element of event.changedElements) {
@@ -1456,6 +1532,19 @@ export async function createGpuCanvas(
     getCamera: () => camera,
     setCamera,
     invalidate: onFontsLoaded,
+    snapshot(element, options = {}) {
+      const node = nodes.get(element);
+      if (!node) return Promise.reject(new Error('Not a node on this canvas'));
+      const largest = device.limits.maxTextureDimension2D;
+      const wanted = options.scale ?? devicePixelRatio;
+      const scale = Math.min(wanted, largest / node.rect.width, largest / node.rect.height);
+      return new Promise((resolve, reject) => {
+        captures.push({ node, scale, resolve, reject, tries: 0 });
+        node.page.setDrawable(true, frameNumber);
+        awaitingPaint = true;
+        canvas.requestPaint();
+      });
+    },
     setBackground(color) {
       [renderer.background, renderer.placeholder] = colorsFor(color);
       schedule();

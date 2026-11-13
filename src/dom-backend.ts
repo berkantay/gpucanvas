@@ -212,6 +212,8 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     worldToScreen: (point) => worldToScreen(camera, point),
     // The browser repaints DOM nodes itself.
     invalidate() {},
+    snapshot: () =>
+      Promise.reject(new Error('snapshot needs the GPU backend (WebGPU and HTML-in-Canvas)')),
     setBackground(color) {
       surface.style.background = color;
     },

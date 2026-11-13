@@ -14,6 +14,8 @@ The same session on both sides: 5,000 live React screens, the same camera path, 
   or React component. Move and resize with snapping guides.
 - **[Shader effects](#shader-effects).** Run WGSL on live components: a glass lens, frost,
   shockwaves, glitch, VHS, or your own.
+- **[Snapshots](#snapshots).** Any node as an image, pixel diffs between versions, and a
+  filmstrip of its history.
 
 ## Try it
 
@@ -184,6 +186,31 @@ the same.
 The DOM backend shows effects that have a `css` look as a CSS `filter` (animated ones as filter
 animations) and the rest as plain nodes. The demo's toolbar puts one effect on every component.
 
+## Snapshots
+
+Every node is already drawn by the GPU, so its pixels are one call away, with no headless
+browser:
+
+```ts
+import { diffImages, recordFilmstrip, toBlob } from 'gpucanvas';
+
+const before = await canvas.snapshot(node, { scale: 2 }); // ImageData, drawn fresh
+const png = await toBlob(before); // a PNG Blob
+
+// ...the screen changes...
+const after = await canvas.snapshot(node, { scale: 2 });
+const { changed, bounds, image } = diffImages(before, after); // what moved, and where
+
+// A snapshot after every change, once it settles.
+const strip = recordFilmstrip(canvas, node, { scale: 0.25, max: 30 });
+strip.frames; // [{ at, image }, ...]
+strip.stop();
+```
+
+A snapshot is the node as it looks now, at any scale, whether or not it is in view. It takes a
+paint or two, about 40 ms for a 1,500 by 1,000 pixel screen. In the demo, select a screen and
+press `S` to save it. Snapshots need the GPU backend; the DOM backend rejects.
+
 ## Run the demo
 
 ```sh
@@ -262,8 +289,6 @@ DOM is the same screens in one CSS-transformed container, which is also the fall
 
 ## Next
 
-- **Snapshots as data.** Every node is already a texture: export it as an image without a
-  headless browser, diff two versions of a screen on the GPU, keep a filmstrip of its history.
 - **Keyboard and accessibility.** Parked pages use `content-visibility: hidden`, so Tab skips
   their nodes. A focused node already stays live; moving focus across pages needs a focus model.
 - **Workers.** Composite in a worker with `captureElementImage`, and drive culling from the GPU.

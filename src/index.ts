@@ -9,6 +9,8 @@ export { bindEditor } from './editor';
 export type { EditorPick, Layer } from './layers';
 export type { Effect, EffectDefinition } from './effects';
 export { defineEffect, EFFECTS as effects } from './effects';
+export type { Filmstrip, FilmstripFrame, ImageDiff } from './snapshots';
+export { diffImages, recordFilmstrip, toBlob } from './snapshots';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
 export { supportsGpuCanvas };
 

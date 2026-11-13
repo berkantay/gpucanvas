@@ -102,6 +102,11 @@ export interface GpuCanvas {
    * class on `<html>` or a web font finishing loading.
    */
   invalidate(): void;
+  /**
+   * The node's pixels as it looks now, drawn fresh at `scale` texels per CSS pixel (default the
+   * device pixel ratio), with straight alpha. GPU backend only: the DOM backend rejects.
+   */
+  snapshot(node: HTMLElement, options?: { scale?: number }): Promise<ImageData>;
   /** Changes the canvas background, any CSS color. */
   setBackground(color: string): void;
   /** Fits all nodes in view. */
