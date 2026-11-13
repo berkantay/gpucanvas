@@ -18,7 +18,7 @@ The GPU path needs HTML-in-Canvas, which is behind a flag:
 
 Without the flag the demo runs the DOM fallback with 1,000 screens and says so.
 
-Status: early (0.2). The API can still change.
+Status: early (0.3). The API can still change.
 
 ```sh
 npm install gpucanvas
