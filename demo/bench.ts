@@ -314,7 +314,7 @@ function session(
         count = marquee.update(from, {
           x: from.x + (to.x - from.x) * t,
           y: from.y + (to.y - from.y) * t,
-        });
+        }).length;
       },
     },
     {

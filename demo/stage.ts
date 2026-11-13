@@ -24,6 +24,7 @@ export interface Stage {
   getCamera(): Camera;
   setCamera(camera: Camera): void;
   getNodesIn(rect: Rect): HTMLElement[];
+  getNodeRect(element: HTMLElement): Rect | null;
   setSelection(elements: Iterable<HTMLElement>): void;
   getStats(): StageStats;
 }

@@ -328,8 +328,7 @@ export function Hints() {
         <Kbd>Scroll</Kbd> to zoom
       </span>
       <span className="flex items-center gap-1.5">
-        <Kbd>Shift</Kbd>
-        <Kbd>Drag</Kbd> to select
+        <Kbd>Shift</Kbd> click or drag to select
       </span>
       <span className="flex items-center gap-1.5">
         <Kbd>F</Kbd> fit

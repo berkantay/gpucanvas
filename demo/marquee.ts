@@ -44,14 +44,10 @@ export function createMarquee(canvas: Stage) {
       };
       const hits = canvas.getNodesIn(world);
       canvas.setSelection(hits);
-      return hits.length;
+      return hits;
     },
     hide() {
       box.style.display = 'none';
-    },
-    clear() {
-      box.style.display = 'none';
-      canvas.setSelection([]);
     },
     remove() {
       box.remove();
@@ -60,13 +56,20 @@ export function createMarquee(canvas: Stage) {
 }
 
 /**
- * Shift-drag anywhere on the canvas draws a selection box, over nodes too: zoomed out, nearly every
- * point is a node. A click on the background or Escape clears the selection.
+ * Shift-click selects a component, or adds it to the selection, or takes it out again. Shift-drag
+ * draws a selection box, over components too: zoomed out, nearly every point is one. A click on
+ * the background or Escape clears the selection.
  */
 export function bindMarquee(canvas: Stage): () => void {
   const marquee = createMarquee(canvas);
   const { surface } = canvas;
   let start: Point | null = null;
+  let dragged = false;
+  let selection = new Set<HTMLElement>();
+  const select = (next: Iterable<HTMLElement>) => {
+    selection = new Set(next);
+    canvas.setSelection(selection);
+  };
   const at = (event: PointerEvent) => {
     const bounds = surface.getBoundingClientRect();
     return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
@@ -76,31 +79,60 @@ export function bindMarquee(canvas: Stage): () => void {
   const onDown = (event: PointerEvent) => {
     if (event.button !== 0) return;
     if (!event.shiftKey) {
-      if (onBackground(event)) marquee.clear();
+      if (onBackground(event)) select([]);
       return;
     }
-    // The node under the pointer never sees this press.
+    // The component under the pointer never sees this press.
     event.stopPropagation();
     start = at(event);
+    dragged = false;
     surface.setPointerCapture(event.pointerId);
   };
   const onMove = (event: PointerEvent) => {
-    if (start) marquee.update(start, at(event));
+    if (!start) return;
+    const point = at(event);
+    dragged ||= Math.hypot(point.x - start.x, point.y - start.y) > 4;
+    if (dragged) selection = new Set(marquee.update(start, point));
   };
-  const onUp = () => {
+  const onUp = (event: PointerEvent) => {
     if (!start) return;
     start = null;
     marquee.hide();
+    if (dragged) return;
+    // A click: the smallest component under the pointer, the one drawn on top.
+    const camera = canvas.getCamera();
+    const { x, y } = at(event);
+    const point = {
+      x: camera.x + x / camera.zoom,
+      y: camera.y + y / camera.zoom,
+      width: 0,
+      height: 0,
+    };
+    const area = (element: HTMLElement) => {
+      const rect = canvas.getNodeRect(element)!;
+      return rect.width * rect.height;
+    };
+    const hit = canvas.getNodesIn(point).sort((a, b) => area(a) - area(b))[0];
+    if (!hit) return;
+    if (selection.has(hit)) selection.delete(hit);
+    else selection.add(hit);
+    select(selection);
+  };
+  // A shift-press would otherwise extend the page's text selection across components.
+  const onMouseDown = (event: MouseEvent) => {
+    if (event.shiftKey) event.preventDefault();
   };
   const onKey = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') marquee.clear();
+    if (event.key === 'Escape') select([]);
   };
   surface.addEventListener('pointerdown', onDown, true);
+  surface.addEventListener('mousedown', onMouseDown, true);
   surface.addEventListener('pointermove', onMove);
   surface.addEventListener('pointerup', onUp);
   window.addEventListener('keydown', onKey);
   return () => {
     surface.removeEventListener('pointerdown', onDown, true);
+    surface.removeEventListener('mousedown', onMouseDown, true);
     surface.removeEventListener('pointermove', onMove);
     surface.removeEventListener('pointerup', onUp);
     window.removeEventListener('keydown', onKey);
