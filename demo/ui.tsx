@@ -3,18 +3,26 @@
  * the canvas has real, interactive UI to render; it is not part of the gpucanvas package.
  */
 import {
+  Children,
   createContext,
+  isValidElement,
   useContext,
+  useEffect,
+  useId,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type ComponentType,
+  type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import {
   RiAppleFill,
+  RiArrowDownSLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
   RiCheckboxCircleFill,
+  RiCheckLine,
   RiCloseLine,
   RiErrorWarningFill,
   RiGithubFill,
@@ -349,6 +357,21 @@ export function Switch({
   );
 }
 
+interface SelectItemProps {
+  id: string;
+  /** What the trigger shows when the item's content is not plain text. */
+  textValue?: string;
+  isDisabled?: boolean;
+  children: ReactNode;
+}
+
+/** One option of a Select. The Select renders it; on its own it renders nothing. */
+export const SelectItem = (_: SelectItemProps) => null;
+
+/**
+ * A dropdown: a trigger showing the chosen option and a listbox under it. Arrow keys, Home and
+ * End move, Enter or Space picks, Escape or a press outside closes.
+ */
 export function Select({
   'aria-label': ariaLabel,
   selectedKey,
@@ -364,33 +387,133 @@ export function Select({
   triggerClassName?: string;
   children: ReactNode;
 }) {
+  const items = Children.toArray(children).flatMap((child) =>
+    isValidElement<SelectItemProps>(child) ? [child.props] : [],
+  );
+  const [ownKey, setOwnKey] = useState(defaultSelectedKey ?? items[0]?.id);
+  const value = selectedKey ?? ownKey;
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const listId = useId();
+  const chosen = items.find((item) => item.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', close, true);
+    return () => document.removeEventListener('pointerdown', close, true);
+  }, [open]);
+
+  const show = () => {
+    setActive(Math.max(0, items.indexOf(chosen!)));
+    setOpen(true);
+  };
+  const pick = (item: SelectItemProps | undefined) => {
+    if (!item || item.isDisabled) return;
+    setOpen(false);
+    trigger.current?.focus();
+    if (item.id === value) return;
+    setOwnKey(item.id);
+    onSelectionChange?.(item.id);
+  };
+  /** The next enabled option from `from` in `step` direction, staying put at either end. */
+  const move = (from: number, step: number) => {
+    for (let i = from + step; i >= 0 && i < items.length; i += step) {
+      if (!items[i].isDisabled) return i;
+    }
+    return active;
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const keys: Record<string, () => void> = open
+      ? {
+          ArrowDown: () => setActive(move(active, 1)),
+          ArrowUp: () => setActive(move(active, -1)),
+          Home: () => setActive(move(-1, 1)),
+          End: () => setActive(move(items.length, -1)),
+          Enter: () => pick(items[active]),
+          ' ': () => pick(items[active]),
+          Escape: () => setOpen(false),
+        }
+      : { ArrowDown: show, ArrowUp: show, Enter: show, ' ': show };
+    if (event.key === 'Tab') setOpen(false);
+    const action = keys[event.key];
+    if (!action) return;
+    event.preventDefault();
+    // Keys that drive the dropdown don't also reach the page's shortcuts.
+    event.stopPropagation();
+    action();
+  };
+
   return (
-    <select
-      aria-label={ariaLabel}
-      value={selectedKey}
-      defaultValue={defaultSelectedKey}
-      onChange={(event) => onSelectionChange?.(event.target.value)}
-      className={cx(FIELD, 'h-10 appearance-auto px-3', triggerClassName)}
-    >
-      {children}
-    </select>
+    <div ref={root} className="relative shrink-0">
+      <button
+        ref={trigger}
+        type="button"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
+        onClick={() => (open ? setOpen(false) : show())}
+        onKeyDown={onKeyDown}
+        className={cx(
+          FIELD,
+          'flex h-10 items-center justify-between gap-2 ps-3 pe-2.5 text-start hover:bg-background-secondary-default',
+          open && 'ring-2 ring-accent-500',
+          triggerClassName,
+        )}
+      >
+        <span className="truncate">{chosen?.textValue ?? chosen?.children}</span>
+        <RiArrowDownSLine
+          aria-hidden
+          className={cx(
+            'size-[18px] shrink-0 text-text-tertiary transition-transform duration-150',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={ariaLabel}
+          // Pressing an option keeps focus on the trigger, so the keyboard still drives it.
+          onMouseDown={(event) => event.preventDefault()}
+          className="absolute top-full left-0 z-30 mt-2 flex min-w-full flex-col gap-0.5 rounded-xl border border-border-button-default bg-background-primary-default p-1 shadow-dropdown"
+        >
+          {items.map((item, i) => (
+            <li
+              key={item.id}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={item.id === value}
+              aria-disabled={item.isDisabled || undefined}
+              onPointerEnter={() => !item.isDisabled && setActive(i)}
+              onClick={() => pick(item)}
+              className={cx(
+                'flex h-9 cursor-default items-center justify-between gap-3 rounded-lg ps-2.5 pe-2 text-body-2-medium whitespace-nowrap text-text-primary',
+                i === active && !item.isDisabled && 'bg-background-secondary-default',
+                item.isDisabled && 'text-text-tertiary opacity-60',
+              )}
+            >
+              {item.children}
+              <RiCheckLine
+                aria-hidden
+                className={cx('size-4 text-accent-500', item.id !== value && 'invisible')}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
-
-export const SelectItem = ({
-  id,
-  isDisabled,
-  children,
-}: {
-  id: string;
-  textValue?: string;
-  isDisabled?: boolean;
-  children: ReactNode;
-}) => (
-  <option value={id} disabled={isDisabled}>
-    {children}
-  </option>
-);
 
 /* ----- Choosers: segmented control and tabs -------------------------------------------------- */
 
