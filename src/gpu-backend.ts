@@ -8,6 +8,7 @@ import {
   visibleWorldRect,
   worldToScreen,
   type Camera,
+  type Point,
   type Rect,
 } from './camera';
 import { elementInNode, nodeOfElement, rectInNode } from './elements';
@@ -298,6 +299,8 @@ export async function createGpuCanvas(
   /** Effects nodes wear, with their parameters and how far past the node they draw. */
   const effects = new Map<HTMLElement, { effect: Effect; params: number[]; pad: number }>();
   const startedAt = performance.now();
+  /** Where effects see the pointer when there is none. */
+  const FAR_AWAY: Point = { x: -1e7, y: -1e7 };
   renderer.onEffectReady = () => schedule();
   const runs: Run[] = [];
   /** An effect in view animates, or is still compiling: draw again next frame. */
@@ -932,8 +935,13 @@ export async function createGpuCanvas(
     if (hovered && !selection.has(hovered)) pushRing(hovered, hoverColor, HOVER_WIDTH);
     const cssWidth = canvas.clientWidth;
     const dpr = canvas.width / Math.max(1, cssWidth);
-    const time = (performance.now() - startedAt) / 1000;
-    renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count, time, runs);
+    const now = performance.now();
+    renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count, runs, {
+      time: (now - startedAt) / 1000,
+      pointer: pointer ? screenToWorld(camera, pointer) : FAR_AWAY,
+      press,
+      sincePress: Math.min((now - pressedAt) / 1000, 1e4),
+    });
   };
 
   /**
@@ -1145,6 +1153,18 @@ export async function createGpuCanvas(
     pointer = null;
     setLive(null);
   };
+  /** Where the last press landed, in world units, and when: effects such as shockwaves use it. */
+  let press: Point = FAR_AWAY;
+  let pressedAt = -Infinity;
+  const onPointerDown = (event: PointerEvent) => {
+    const bounds = canvas.getBoundingClientRect();
+    press = screenToWorld(camera, {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    });
+    pressedAt = performance.now();
+    if (effects.size) schedule();
+  };
   const onFocusIn = (event: FocusEvent) => {
     const node = nodeOf(event.target as HTMLElement) ?? null;
     if (node === focused) return;
@@ -1185,6 +1205,7 @@ export async function createGpuCanvas(
   document.fonts.addEventListener('loadingdone', onFontsLoaded);
   surface.addEventListener('pointermove', onPointerMove);
   surface.addEventListener('pointerleave', onPointerLeave);
+  surface.addEventListener('pointerdown', onPointerDown, true);
   canvas.addEventListener('focusin', onFocusIn);
   canvas.addEventListener('focusout', onFocusOut);
   // A transition paints without touching the DOM, so a click (from a person or from script)
@@ -1473,6 +1494,7 @@ export async function createGpuCanvas(
       canvas.removeEventListener('load', onResourceLoad, true);
       surface.removeEventListener('pointermove', onPointerMove);
       surface.removeEventListener('pointerleave', onPointerLeave);
+      surface.removeEventListener('pointerdown', onPointerDown, true);
       canvas.removeEventListener('focusin', onFocusIn);
       canvas.removeEventListener('focusout', onFocusOut);
       canvas.removeEventListener('transitionrun', onTransitionRun);

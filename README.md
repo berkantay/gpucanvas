@@ -125,9 +125,17 @@ canvas.setEffect(node, effects.glow, [1, 0.4, 0.2, 32]); // orange, 32 px reach
 canvas.setEffect(node, null); // back to plain
 ```
 
-Built in: `glow`, `hue`, `ripple`, `blur`, `pixelate`, `grayscale`, and `dissolve` for a node
-leaving or arriving (its parameter is the progress, 0 to 1). Animated effects draw every frame
-while their node is in view; the others cost nothing once drawn.
+Built in:
+
+- Following the pointer: `glass` (a magnifying lens), `frost` (ice, clear around the pointer),
+  `dither` (a lens of big dithered pixels).
+- On each press: `shockwave`, a ring that bends the node as it spreads.
+- Running on their own: `glitch`, `vhs`, `glow`, `hue`, `ripple`.
+- Still: `blur`, `pixelate`, `grayscale`, and `dissolve` for a node leaving or arriving (its
+  parameter is the progress, 0 to 1).
+
+Animated effects draw every frame while their node is in view; still ones cost nothing once
+drawn.
 
 Your own is a WGSL function over the node's pixels:
 
@@ -148,8 +156,9 @@ const scanlines = defineEffect({
 ```
 
 `EffectInput` has `uv` (0 to 1 across the node), `size` in CSS pixels, `time` in seconds,
-`zoom` and the four `params`. `source(uv)` reads the node's pixels, premultiplied, and is
-transparent outside it. An effect that draws past its node, like a glow, declares how far with
+`zoom`, the four `params`, the `pointer` and the last `press` in the node's uv, and
+`sincePress` in seconds. `source(uv)` reads the node's pixels, premultiplied, and is
+transparent outside it; `hash` and `noise` give random values. An effect that draws past its node, like a glow, declares how far with
 `pad`. Effects read the node's whole snapshot, so very close in they are softer than plain nodes.
 
 The DOM backend shows effects that have a `css` look as a CSS `filter` (animated ones as filter

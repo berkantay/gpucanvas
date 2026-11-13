@@ -1,5 +1,5 @@
 import type { Atlas } from './atlas';
-import type { Camera } from './camera';
+import type { Camera, Point } from './camera';
 import { compositeShader, effectShader } from './composite-shader';
 import type { Effect } from './effects';
 
@@ -22,7 +22,7 @@ export class CompositeRenderer {
   instances = new Float32Array(FLOATS_PER_INSTANCE * 4096);
   private instanceBuffer: GPUBuffer;
   private readonly uniforms: GPUBuffer;
-  private readonly uniformData = new Float32Array(12);
+  private readonly uniformData = new Float32Array(20);
   private readonly pipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
   private readonly bindGroupLayout: GPUBindGroupLayout;
@@ -151,8 +151,9 @@ export class CompositeRenderer {
     cssHeight: number,
     dpr: number,
     count: number,
-    time: number,
     runs: readonly Run[],
+    /** Seconds since start, pointer and press in world units, seconds since the press. */
+    effects: { time: number; pointer: Point; press: Point; sincePress: number },
   ) {
     const { device } = this;
     this.uniformData.set([
@@ -163,8 +164,13 @@ export class CompositeRenderer {
       camera.zoom,
       dpr,
       this.atlas.size,
-      time,
+      effects.time,
       ...this.placeholder,
+      effects.pointer.x,
+      effects.pointer.y,
+      effects.press.x,
+      effects.press.y,
+      effects.sincePress,
     ]);
     device.queue.writeBuffer(this.uniforms, 0, this.uniformData);
     if (count > 0) {

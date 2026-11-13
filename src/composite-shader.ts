@@ -17,6 +17,8 @@ struct View {
   atlasSize: f32,
   time: f32,          // seconds since the canvas started
   placeholder: vec4f, // premultiplied color for nodes without a snapshot
+  pointer: vec4f,     // pointer and last press in world units; far away when there is none
+  pressTime: f32,     // seconds since the last press
 }
 
 @group(0) @binding(0) var<uniform> view: View;
@@ -39,6 +41,7 @@ struct Varyings {
   @location(4) uv: vec2f, // 0 to 1 across the node, past that in an effect's padding
   @location(5) @interpolate(flat) size: vec2f,
   @location(6) @interpolate(flat) params: vec4f,
+  @location(7) @interpolate(flat) corner: vec2f, // the node's top left in world units
 }
 
 @vertex
@@ -72,6 +75,7 @@ fn vs(@builtin(vertex_index) vertex: u32, instance: Instance) -> Varyings {
   out.info = instance.info.xy;
   out.uv = mix(-grow / instance.rect.zw, 1.0 + grow / instance.rect.zw, corner);
   out.size = instance.rect.zw;
+  out.corner = instance.rect.xy;
   out.params = instance.params;
   return out;
 }
@@ -118,6 +122,9 @@ struct EffectInput {
   time: f32,
   zoom: f32,
   params: vec4f,
+  pointer: vec2f,
+  press: vec2f,
+  sincePress: f32,
 }
 
 var<private> sourceRect: vec4f;
@@ -131,12 +138,31 @@ fn source(uv: vec2f) -> vec4f {
   return textureSampleLevel(atlas, atlasSampler, texel / view.atlasSize, sourceLayer, 0.0);
 }
 
+fn hash(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
+}
+
+fn noise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i), hash(i + vec2f(1.0, 0.0)), u.x),
+    mix(hash(i + vec2f(0.0, 1.0)), hash(i + vec2f(1.0, 1.0)), u.x),
+    u.y,
+  );
+}
+
 ${wgsl}
 
 @fragment
 fn fs(in: Varyings) -> @location(0) vec4f {
   sourceRect = in.color;
   sourceLayer = i32(in.info.x);
-  return effect(EffectInput(in.uv, in.size, view.time, view.zoom, in.params));
+  let pointer = (view.pointer.xy - in.corner) / in.size;
+  let press = (view.pointer.zw - in.corner) / in.size;
+  return effect(
+    EffectInput(in.uv, in.size, view.time, view.zoom, in.params, pointer, press, view.pressTime),
+  );
 }
 `;
