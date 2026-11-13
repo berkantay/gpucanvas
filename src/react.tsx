@@ -10,12 +10,14 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  bindSelection,
+  bindEditor,
   createGpuCanvas,
+  type Editor,
+  type EditorOptions,
+  type EditorPick,
   type GpuCanvas as GpuCanvasInstance,
   type GpuCanvasOptions,
-  type Selection,
-  type SelectionOptions,
+  type Layer,
 } from './index';
 
 const CanvasContext = createContext<GpuCanvasInstance | null>(null);
@@ -99,49 +101,61 @@ export function CanvasNode({ x, y, width, height, children, className, style }: 
 export const useGpuCanvas = () => useContext(CanvasContext);
 
 /**
- * Click, hover and box selection on the canvas around it (see `bindSelection`), as React state.
- * Use it inside `<GpuCanvas>`; `onChange` lifts the selection out.
+ * The editor (`bindEditor`) on the canvas around it, with its selection as React state. Use it
+ * inside `<GpuCanvas>`; `onChange` lifts the selection out.
  */
-export function useSelection(options: SelectionOptions = {}) {
+export function useEditor(options: EditorOptions = {}) {
   const canvas = useGpuCanvas();
-  const [selected, setSelected] = useState<Element[]>([]);
-  const selection = useRef<Selection | null>(null);
+  const [selected, setSelected] = useState<Layer[]>([]);
+  const editor = useRef<Editor | null>(null);
   const latest = useRef(options);
   latest.current = options;
-  // A new pick function each render is the same pick: read the latest one when a click lands.
+  // Functions are read when they are called, so a new one each render does not rebind.
   const pick = typeof options.pick === 'function' ? 'function' : (options.pick ?? 'node');
-  const { trigger, hover, marquee } = options;
+  const transforms = !!options.onTransform;
+  const { trigger, hover, marquee, labels, snap, color } = options;
 
   useEffect(() => {
     if (!canvas) return;
-    const bound = bindSelection(canvas, {
+    const bound = bindEditor(canvas, {
       pick:
         pick === 'function'
-          ? (element, at) =>
-              (latest.current.pick as Exclude<SelectionOptions['pick'], string>)!(element, at)
+          ? (element, at) => (latest.current.pick as PickFunction)(element, at)
           : pick,
       trigger,
       hover,
       marquee,
+      labels,
+      snap,
+      color,
+      label: (layer) =>
+        latest.current.label ? latest.current.label(layer) : defaultLabel(canvas, layer),
       onChange(next) {
         setSelected(next);
         latest.current.onChange?.(next);
       },
+      onTransform: transforms ? (event) => latest.current.onTransform?.(event) : undefined,
     });
-    selection.current = bound;
+    editor.current = bound;
     return () => {
       bound.destroy();
-      selection.current = null;
+      editor.current = null;
       setSelected([]);
     };
-  }, [canvas, pick, trigger, hover, marquee]);
+  }, [canvas, pick, trigger, hover, marquee, labels, snap, color, transforms]);
 
   return {
     selected,
-    set: (elements: Iterable<Element>) => selection.current?.set(elements),
-    clear: () => selection.current?.clear(),
+    set: (layers: Iterable<Element | Element[]>) => editor.current?.set(layers),
+    clear: () => editor.current?.clear(),
   };
 }
+
+type PickFunction = Extract<EditorPick, (...args: never[]) => unknown>;
+
+/** The editor's own label: the tag name inside nodes, nothing for nodes. */
+const defaultLabel = (canvas: GpuCanvasInstance, layer: Layer) =>
+  canvas.getNodeOf(layer[0]) === layer[0] ? null : layer[0].localName;
 
 export interface ComponentInfo {
   /** The component's display name. Production builds usually minify it. */
@@ -205,3 +219,18 @@ export function componentsOf(element: Element): ComponentInfo[] {
 /** The nearest React component that rendered `element`, or null. */
 export const componentOf = (element: Element): ComponentInfo | null =>
   componentsOf(element)[0] ?? null;
+
+/**
+ * A pick for `bindEditor` and `useEditor` that selects React components: a click lands on the
+ * outermost component in the node, and each double-click goes one component deeper.
+ */
+export const pickComponents = (element: Element): Element[][] =>
+  componentsOf(element)
+    .reverse()
+    .map((component) => component.elements);
+
+/** A label for components: the name of the outermost component a layer is the top of. */
+export const labelComponent = (layer: Layer): string | null =>
+  componentsOf(layer[0])
+    .filter((component) => component.elements[0] === layer[0])
+    .at(-1)?.name ?? null;

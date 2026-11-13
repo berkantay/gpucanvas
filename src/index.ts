@@ -4,8 +4,9 @@ import type { GpuCanvas, GpuCanvasOptions } from './types';
 
 export type { Camera, Point, Rect } from './camera';
 export { fitCamera, screenToWorld, worldToScreen, zoomAt } from './camera';
-export type { Selection, SelectionOptions, SelectionPick } from './selection';
-export { bindSelection } from './selection';
+export type { Editor, EditorOptions, TransformEvent } from './editor';
+export { bindEditor } from './editor';
+export type { EditorPick, Layer } from './layers';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
 export { supportsGpuCanvas };
 

@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import {
-  bindSelection,
+  bindEditor,
   fitCamera,
   supportsGpuCanvas,
   type GpuCanvas as GpuCanvasInstance,
-  type SelectionPick,
+  type EditorOptions,
+  type TransformEvent,
 } from '../src/index';
-import { componentOf, GpuCanvas } from '../src/react';
+import { GpuCanvas, labelComponent, pickComponents } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { FlagNotice, Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
 import { startAgents, type Agents } from './agents';
@@ -27,15 +28,17 @@ const NODES = Number(params.get('n')) || (gpuSupported ? 5_000 : 1_000);
 const HUD = params.get('hud') !== '0';
 /** `?agents=0` turns off the cursors building screens. */
 const AGENTS = Number(params.get('agents') ?? 30);
-/** What a shift-click selects: `?pick=node` (a whole screen), `element` or `component`. */
-const PICKS: Record<string, SelectionPick> = {
-  node: 'node',
-  element: 'element',
-  component: (element) => componentOf(element)?.elements ?? null,
-};
-const PICK = PICKS[params.get('pick') ?? 'node'] ?? 'node';
+/**
+ * What a click selects: `?pick=node` (a whole screen), `element` or `component`; a double-click
+ * goes one level deeper. `?edit=1` is the edit mode: every click selects, drags move, handles resize.
+ */
+const PICK = params.get('pick');
+const EDIT = params.get('edit') === '1';
+const EDITOR: EditorOptions =
+  PICK === 'component'
+    ? { pick: pickComponents, label: labelComponent }
+    : { pick: PICK === 'element' ? 'element' : 'node' };
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
-/** Where the bench's close-ups land: clusters of product screens, not walls of notes. */
 /** Where the bench works: clusters of product screens, not walls of notes. */
 const SHOWCASE = CLUSTERS.flatMap((cluster, id) =>
   cluster.items.filter((item) => item.screen).length >= 3
@@ -144,6 +147,28 @@ function useProgressiveMount(total: number, start: boolean) {
   return { mounted, mountMs };
 }
 
+/**
+ * The demo applies moves and resizes straight to the DOM: nodes through `updateNode`, elements
+ * inside them through their own style. A real editor would write its document instead.
+ */
+function applyTransform(canvas: GpuCanvasInstance, event: TransformEvent) {
+  event.layers.forEach((layer, i) => {
+    const element = layer[0] as HTMLElement;
+    const from = event.from[i];
+    const to = event.to[i];
+    if (canvas.getNodeOf(element) === element) return canvas.updateNode(element, to);
+    if (event.phase === 'start') element.dataset.translate = element.style.translate;
+    const [x = 0, y = 0] = (element.dataset.translate ?? '')
+      .split(' ')
+      .map((v) => parseFloat(v) || 0);
+    element.style.translate = `${x + to.x - from.x}px ${y + to.y - from.y}px`;
+    if (event.kind === 'resize') {
+      element.style.width = `${to.width}px`;
+      element.style.height = `${to.height}px`;
+    }
+  });
+}
+
 function App() {
   const [canvas, setCanvas] = useState<Stage | null>(null);
   const [agents, setAgents] = useState<Agents | null>(null);
@@ -229,8 +254,12 @@ function App() {
 
   useEffect(() => {
     if (!gpucanvas) return;
-    const selection = bindSelection(gpucanvas, { pick: PICK });
-    return () => selection.destroy();
+    const editor = bindEditor(gpucanvas, {
+      ...EDITOR,
+      trigger: EDIT ? 'click' : 'shift-click',
+      onTransform: EDIT ? (event) => applyTransform(gpucanvas, event) : undefined,
+    });
+    return () => editor.destroy();
   }, [gpucanvas]);
 
   useEffect(() => {

@@ -41,48 +41,61 @@ HTML-in-Canvas are available (Chrome 157+), nodes are snapshotted into a GPU atl
 one instanced draw call. Everywhere else it falls back to a CSS-transformed container with the
 same API.
 
-## Selection
+## Editing
 
-Select whole nodes, any element inside them, or the React component that rendered it. The GPU
-draws the outlines, 2 CSS pixels wide at any zoom, and they follow their element's layout.
+`bindEditor` turns the canvas into an editor: select, drill in, move and resize. The GPU draws
+the outlines, 2 CSS pixels wide at any zoom, and they follow their element's layout. Names,
+sizes, handles and snapping guides sit in a thin overlay above it.
 
 ```ts
-import { bindSelection } from 'gpucanvas';
+import { bindEditor } from 'gpucanvas';
 
-const selection = bindSelection(canvas, {
+const editor = bindEditor(canvas, {
   pick: 'element', // 'node' (default), 'element', or a function
-  onChange: (selected) => console.log(selected),
+  trigger: 'click', // an edit mode; the default 'shift-click' leaves clicks to your components
+  onChange: (layers) => console.log(layers),
+  onTransform: ({ phase, layers, to }) => {
+    // The editor never moves anything itself. Apply `to` with updateNode, state or styles.
+  },
 });
 ```
 
-By default clicks still reach your components. Shift-click selects, or adds to and removes from
-the selection. Shift-drag draws a box that selects the nodes it touches. Holding shift outlines
-what a click would select. A click on the background or Escape clears. With
-`trigger: 'click'`, every click selects, for an edit mode.
+A click selects the outermost layer under the pointer, a whole node. Each double-click goes one
+layer deeper, and later clicks stay at that depth. Wrappers the size of their parent are skipped,
+so every double-click visibly changes something.
 
-`pick` decides what a click selects:
+| Input              | Does                                                                         |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Double-click       | One layer deeper                                                             |
+| Enter, Shift+Enter | First child, parent                                                          |
+| Tab, Shift+Tab     | Next and previous sibling                                                    |
+| Escape             | Cancels a drag, then goes up a layer, then clears                            |
+| Drag               | Moves, snapping to the edges and centers of neighbors (Shift locks the axis) |
+| Handles            | Resize (Shift on a corner keeps the ratio)                                   |
+| Drag on open space | A box that selects the layers it touches, inside the layer you are in        |
 
-- `'node'`: the whole node.
-- `'element'`: the deepest element under the pointer.
-- a function of that element, such as `(el) => el.closest('[data-component]')`. It can return
-  several elements.
+With the default `trigger: 'shift-click'`, the same works with Shift held, and clicks still reach
+your components. A layer is an array of elements, so one layer can be a component that renders
+several. `pick` decides the layers:
 
-In React, `useSelection` gives the selection as state, and `componentOf` finds the component
-that rendered an element:
+- `'node'`: whole nodes only.
+- `'element'`: every element from the node down to the one under the pointer.
+- a function of that element, returning the layers that hold it, outermost first.
+
+In React, `useEditor` gives the selection as state, and `pickComponents` makes the layers React
+components:
 
 ```tsx
-import { componentOf, useSelection } from 'gpucanvas/react';
+import { labelComponent, pickComponents, useEditor } from 'gpucanvas/react';
 
 // Inside <GpuCanvas>:
-const { selected, clear } = useSelection({
-  pick: (el) => componentOf(el)?.elements ?? null,
-});
-componentOf(selected[0]); // { name: 'Button', elements: [<button>] }
+const { selected, clear } = useEditor({ pick: pickComponents, label: labelComponent });
+// Click a screen, double-click: SignIn, SignInCard, Button.
 ```
 
-`componentOf` reads React's internal fibers, as click-to-component tools do. Production builds
-usually minify component names, so mark components with your own attributes when you need
-names there.
+`pickComponents` and `componentOf` read React's internal fibers, as click-to-component tools do.
+Production builds usually minify component names, so mark components with your own attributes
+when you need names there.
 
 The building blocks, for your own interactions:
 
@@ -97,7 +110,7 @@ canvas.screenToWorld(point); // surface pixels to world units, and worldToScreen
 ```
 
 Colors are the `selectionColor` and `hoverColor` options. The demo takes `?pick=node`,
-`element` or `component`.
+`element` or `component`, and `?edit=1` for the edit mode.
 
 ## Run the demo
 
