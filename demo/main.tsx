@@ -22,7 +22,16 @@ import {
 import { GpuCanvas, labelComponent, pickComponents } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { DEMO_EFFECTS, parseEffect } from './effects';
-import { FlagNotice, Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
+import {
+  FlagNotice,
+  Hints,
+  Meter,
+  NODE_COUNTS,
+  parsePick,
+  Results,
+  Toolbar,
+  type Pick,
+} from './hud';
 import { startAgents, type Agents } from './agents';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
@@ -35,19 +44,20 @@ const MODE = requested === 'gpu' && !gpuSupported ? 'dom' : requested;
 const NODES = Number(params.get('n')) || (gpuSupported ? 5_000 : 1_000);
 /** `?hud=0` leaves only the canvas on screen, for recording footage. */
 const HUD = params.get('hud') !== '0';
-/** `?agents=0` turns off the cursors building screens. */
-const AGENTS = Number(params.get('agents') ?? 30);
 /**
- * What a click selects: React components (default), `?pick=element` or `?pick=node` (whole
- * screens); a double-click goes one level deeper. The edit mode is on: every click selects, drags
- * move, handles resize. `?edit=0` leaves clicks to the components and selects with shift.
+ * The toolbar owns the remaining settings; the URL only remembers them across reloads. Agents are
+ * the cursors building screens.
  */
-const PICK = params.get('pick');
-const EDIT = params.get('edit') !== '0';
-const EDITOR: EditorOptions =
-  PICK === 'element' || PICK === 'node'
-    ? { pick: PICK }
-    : { pick: pickComponents, label: labelComponent };
+const AGENT_COUNT = 30;
+const INITIAL_AGENTS = params.get('agents') !== '0';
+/**
+ * Edit: every click selects, drags move, handles resize, a double-click goes one level deeper.
+ * Interact: clicks reach the components, and Shift selects.
+ */
+const INITIAL_EDIT = params.get('edit') !== '0';
+const INITIAL_PICK = parsePick(params.get('pick'));
+const editorOptions = (pick: Pick): EditorOptions =>
+  pick === 'component' ? { pick: pickComponents, label: labelComponent } : { pick };
 /** `?effect=glow` (or hue, blur, ripple, pixelate, grayscale): a shader on every component. */
 const INITIAL_EFFECT = parseEffect(params.get('effect'));
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
@@ -65,7 +75,7 @@ const INTRO_ZOOM = 0.16;
  */
 const INTRO = (() => {
   const first = SHOWCASE[0]?.bounds;
-  if (AGENTS <= 0 || !first) return null;
+  if (!INITIAL_AGENTS || !first) return null;
   const width = innerWidth / INTRO_ZOOM;
   const height = innerHeight / INTRO_ZOOM;
   return {
@@ -216,6 +226,9 @@ function App() {
   const [results, setResults] = useState(loadResults);
   const [benchProgress, setBenchProgress] = useState<number | null>(null);
   const [effect, setEffect] = useState(INITIAL_EFFECT);
+  const [edit, setEdit] = useState(INITIAL_EDIT);
+  const [pick, setPick] = useState(INITIAL_PICK);
+  const [agentsOn, setAgentsOn] = useState(INITIAL_AGENTS);
   const progressive = useProgressiveMount(CLUSTERS.length, gpucanvas !== null);
   const { mountMs } = progressive;
   const mountedNodes = MOUNTED_NODES[progressive.mounted];
@@ -267,15 +280,23 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // The intro plays once; agents switched back on later just work on the canvas.
+  const intro = useRef(INTRO);
   useEffect(() => {
-    if (!canvas || AGENTS <= 0) return;
-    const started = startAgents(canvas, AGENTS, INTRO);
+    if (!canvas || !agentsOn) return;
+    const started = startAgents(canvas, AGENT_COUNT, intro.current);
+    intro.current = null;
     setAgents(started);
-    return () => started.stop();
-  }, [canvas]);
+    return () => {
+      started.release();
+      started.stop();
+      setAgents(null);
+    };
+  }, [canvas, agentsOn]);
 
+  const revealed = useRef(false);
   useEffect(() => {
-    if (!canvas || mountMs === null || (AGENTS > 0 && !agents)) return;
+    if (revealed.current || !canvas || mountMs === null || (agentsOn && !agents)) return;
     let cancelled = false;
     const { clientWidth: w, clientHeight: h } = canvas.surface;
     // Once the intro's screens are built, the camera pulls out to everything.
@@ -287,20 +308,29 @@ function App() {
     });
     reveal.then(() => {
       if (cancelled) return;
+      revealed.current = true;
       window.mountMs = mountMs;
       if (params.has('bench')) latest.current.bench();
     });
     return () => {
       cancelled = true;
     };
-  }, [canvas, mountMs, agents]);
+  }, [canvas, mountMs, agents, agentsOn]);
 
-  // Every component wears the effect once all have mounted. The URL keeps it across mode switches.
+  // The URL keeps the toolbar settings across reloads and mode switches.
   useEffect(() => {
     const next = new URLSearchParams(location.search);
-    if (effect) next.set('effect', effect);
-    else next.delete('effect');
+    const set = (key: string, value: string | null) =>
+      value === null ? next.delete(key) : next.set(key, value);
+    set('effect', effect);
+    set('edit', edit ? null : '0');
+    set('pick', pick === 'component' ? null : pick);
+    set('agents', agentsOn ? null : '0');
     history.replaceState(null, '', `?${next}`);
+  }, [effect, edit, pick, agentsOn]);
+
+  // Every component wears the effect once all have mounted.
+  useEffect(() => {
     if (!gpucanvas || mountMs === null) return;
     const all = gpucanvas.getNodesIn({ x: -1e9, y: -1e9, width: 2e9, height: 2e9 });
     const shader = effect ? DEMO_EFFECTS[effect].effect : null;
@@ -310,9 +340,9 @@ function App() {
   useEffect(() => {
     if (!gpucanvas) return;
     const editor = bindEditor(gpucanvas, {
-      ...EDITOR,
-      trigger: EDIT ? 'click' : 'shift-click',
-      onTransform: EDIT ? (event) => applyTransform(gpucanvas, event) : undefined,
+      ...editorOptions(pick),
+      trigger: edit ? 'click' : 'shift-click',
+      onTransform: edit ? (event) => applyTransform(gpucanvas, event) : undefined,
     });
     // S saves the selected screen as a PNG. D dissolves it out and back in, W wipes it.
     const onKey = (event: KeyboardEvent) => {
@@ -329,7 +359,7 @@ function App() {
       window.removeEventListener('keydown', onKey);
       editor.destroy();
     };
-  }, [gpucanvas]);
+  }, [gpucanvas, edit, pick]);
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;
@@ -385,12 +415,18 @@ function App() {
             onNodes={(n) => navigate({ n: String(n) })}
             effect={effect}
             onEffect={setEffect}
+            edit={edit}
+            pick={pick}
+            agents={agentsOn}
+            onEdit={setEdit}
+            onPick={setPick}
+            onAgents={setAgentsOn}
             onBench={bench}
             onTheme={toggleTheme}
           />
           <Meter canvas={canvas} mounted={mountedNodes} total={NODES} />
           <Results nodes={NODES} effect={effect} results={results} />
-          <Hints edit={EDIT} />
+          <Hints edit={edit} />
           {!gpuSupported && <FlagNotice />}
         </>
       )}

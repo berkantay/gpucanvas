@@ -35,7 +35,7 @@ Open **[berkantay.github.io/gpucanvas](https://berkantay.github.io/gpucanvas/)**
 later. Thirty agent cursors build the first view, then the camera pulls out to all 5,000 screens.
 
 - Click a screen to select it, double-click to go deeper, drag to move it. Double-click a text
-  field to type in it.
+  field to type in it, or switch the toolbar to Interact and use the screens like a normal page.
 - Pick a shader effect in the toolbar, or open one directly:
   [glass](https://berkantay.github.io/gpucanvas/?effect=glass),
   [shockwave](https://berkantay.github.io/gpucanvas/?effect=shockwave) (click anywhere),
@@ -144,9 +144,8 @@ canvas.setHover(el); // a lighter outline; null clears
 canvas.screenToWorld(point); // surface pixels to world units, and worldToScreen back
 ```
 
-Colors are the `selectionColor` and `hoverColor` options. The demo picks React components in the edit mode;
-`?pick=element` or `?pick=node` picks elements or whole screens, and `?edit=0` leaves clicks to
-the components.
+Colors are the `selectionColor` and `hoverColor` options. In the demo, the toolbar switches between
+Edit and Interact (clicks reach the components) and picks components, elements or whole screens.
 
 ## Shader effects
 

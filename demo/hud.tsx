@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { RiMoonLine, RiPlayFill, RiSunLine } from '@remixicon/react';
+import { RiCursorLine, RiMoonLine, RiPlayFill, RiSunLine } from '@remixicon/react';
 import {
   Badge,
   Button,
@@ -16,6 +16,15 @@ import { DEMO_EFFECTS, type DemoEffect } from './effects';
 import { MODE_LABEL, MODES, type Mode, type Stage } from './stage';
 
 export const NODE_COUNTS = [1_000, 2_500, 5_000, 10_000];
+/** What a click selects: a React component, a single element, or a whole screen. */
+export type Pick = 'component' | 'element' | 'node';
+const PICKS: { id: Pick; label: string }[] = [
+  { id: 'component', label: 'Components' },
+  { id: 'element', label: 'Elements' },
+  { id: 'node', label: 'Screens' },
+];
+export const parsePick = (value: string | null): Pick =>
+  PICKS.find((pick) => pick.id === value)?.id ?? 'component';
 const PANEL =
   'rounded-2xl border border-border-button-default bg-background-primary-default shadow-dropdown';
 const format = (value: number) => value.toLocaleString('en-US');
@@ -28,9 +37,15 @@ export function Toolbar({
   dark,
   canBench,
   effect,
+  edit,
+  pick,
+  agents,
   onMode,
   onNodes,
   onEffect,
+  onEdit,
+  onPick,
+  onAgents,
   onBench,
   onTheme,
 }: {
@@ -41,19 +56,31 @@ export function Toolbar({
   dark: boolean;
   canBench: boolean;
   effect: DemoEffect | null;
+  edit: boolean;
+  pick: Pick;
+  agents: boolean;
   onMode: (mode: Mode) => void;
   onNodes: (nodes: number) => void;
   onEffect: (effect: DemoEffect | null) => void;
+  onEdit: (edit: boolean) => void;
+  onPick: (pick: Pick) => void;
+  onAgents: (agents: boolean) => void;
   onBench: () => void;
   onTheme: () => void;
 }) {
+  const counts = NODE_COUNTS.includes(nodes)
+    ? NODE_COUNTS
+    : [...NODE_COUNTS, nodes].sort((a, b) => a - b);
   return (
-    <div className={cx(PANEL, 'fixed top-4 left-4 z-20 flex items-center gap-2 p-2')}>
-      <div className="flex items-center gap-2 ps-1 pe-2">
+    <div
+      className={cx(
+        PANEL,
+        'fixed top-4 left-4 z-20 flex max-w-[calc(100vw-20rem)] flex-wrap items-center gap-2 p-2',
+      )}
+    >
+      <span className="ps-1" title="gpucanvas">
         <Logo />
-        <span className="text-body-semibold text-text-primary">gpucanvas</span>
-      </div>
-      <Separator />
+      </span>
       <SegmentedControl
         aria-label="Renderer"
         selectedKeys={[mode]}
@@ -64,7 +91,7 @@ export function Toolbar({
       >
         {MODES.map((id) => (
           <SegmentedControlItem key={id} id={id} isDisabled={id === 'gpu' && !gpuSupported}>
-            {MODE_LABEL[id]}
+            {RENDERER_LABEL[id]}
           </SegmentedControlItem>
         ))}
       </SegmentedControl>
@@ -74,12 +101,35 @@ export function Toolbar({
         onSelectionChange={(key) => key !== null && onNodes(Number(key))}
         triggerClassName="min-w-44"
       >
-        {NODE_COUNTS.map((count) => (
+        {counts.map((count) => (
           <SelectItem key={count} id={String(count)} textValue={`${format(count)} components`}>
             {format(count)} components
           </SelectItem>
         ))}
       </Select>
+      <Separator />
+      <SegmentedControl
+        aria-label="Clicks"
+        selectedKeys={[edit ? 'edit' : 'interact']}
+        onSelectionChange={(keys) => onEdit([...keys][0] === 'edit')}
+      >
+        <SegmentedControlItem id="edit">Edit</SegmentedControlItem>
+        <SegmentedControlItem id="interact">Interact</SegmentedControlItem>
+      </SegmentedControl>
+      {edit && (
+        <Select
+          aria-label="What a click selects"
+          selectedKey={pick}
+          onSelectionChange={(key) => key !== null && onPick(parsePick(key))}
+          triggerClassName="min-w-36"
+        >
+          {PICKS.map(({ id, label }) => (
+            <SelectItem key={id} id={id} textValue={label}>
+              {label}
+            </SelectItem>
+          ))}
+        </Select>
+      )}
       <Select
         aria-label="Shader effect"
         selectedKey={effect ?? 'none'}
@@ -97,14 +147,25 @@ export function Toolbar({
           </SelectItem>
         ))}
       </Select>
+      <Separator />
+      <IconButton
+        icon={RiCursorLine}
+        aria-label="Agent cursors"
+        title={agents ? 'Agent cursors: on' : 'Agent cursors: off'}
+        aria-pressed={agents}
+        onClick={() => onAgents(!agents)}
+        className={cx(
+          agents && 'bg-accent-100 text-accent-700 dark:bg-accent-900 dark:text-accent-300',
+        )}
+      />
       <Button
         leadingIcon={RiPlayFill}
         disabled={!canBench || benchProgress !== null}
         onClick={onBench}
-        className="min-w-40"
+        className="min-w-32"
       >
         {benchProgress === null
-          ? 'Run benchmark'
+          ? 'Benchmark'
           : `Running ${((benchProgress * BENCH_DURATION_MS) / 1000).toFixed(1)} s`}
       </Button>
       <IconButton
@@ -127,6 +188,9 @@ function Logo() {
     </svg>
   );
 }
+
+/** Short labels keep the toolbar on one row; the frame rate badge names the renderer in full. */
+const RENDERER_LABEL: Record<Mode, string> = { gpu: 'GPU', dom: 'DOM' };
 
 const Separator = () => <span aria-hidden className="mx-1 h-6 w-px bg-border-button-default" />;
 
