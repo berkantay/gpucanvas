@@ -104,6 +104,7 @@ interface Wait {
  */
 const TOUR: Stop[] = [
   {
+    // Typing: every keystroke re-renders a live input, and the GPU redraws it.
     at: [0.15, 0.2],
     screen: /^\w+ \/ Web \/ Messages$/,
     zoom: 1.1,
@@ -115,13 +116,7 @@ const TOUR: Stop[] = [
     ],
   },
   {
-    at: [0.85, 0.15],
-    screen: /^\w+ \/ Web \/ Calendar$/,
-    zoom: 1.1,
-    route: 'across',
-    actions: [{ press: 'New event' }, { press: 'New event' }, { press: 'New event' }],
-  },
-  {
+    // The longest flight, then charts that animate frame by frame.
     at: [0.85, 0.75],
     screen: /^\w+ \/ Web \/ Dashboard$/,
     zoom: 1.1,
@@ -129,41 +124,11 @@ const TOUR: Stop[] = [
     actions: [{ press: '12 months' }, { wait: 600 }, { press: '7 days' }, { wait: 600 }],
   },
   {
-    at: [0.15, 0.8],
-    screen: /^\w+ \/ Web \/ Board$/,
-    zoom: 1.1,
-    route: 'overview',
-    actions: [
-      { press: 'card 0-0' },
-      { press: 'card 0-0' },
-      { press: 'card 0-0' },
-      { press: 'card 1-0' },
-      { press: 'Add card' },
-    ],
-  },
-  {
-    at: [0.5, 0.45],
-    screen: /^\w+ \/ iOS \/ Player$/,
-    zoom: 2,
-    route: 'across',
-    actions: [{ press: 'Play' }, { wait: 1200 }, { press: 'Next track' }, { press: 'Like' }],
-  },
-  {
-    at: [0.35, 0.1],
-    screen: /^\w+ \/ iOS \/ Notifications$/,
-    zoom: 2,
-    route: 'across',
-    actions: [
-      { press: 'Dismiss notification' },
-      { press: 'Dismiss notification' },
-      { press: 'Dismiss notification' },
-    ],
-  },
-  {
+    // Out to all of them and back in, then a push to 500% on the last click.
     at: [0.6, 0.9],
     screen: /^\w+ \/ iOS \/ Booking$/,
     zoom: 2,
-    route: 'across',
+    route: 'overview',
     actions: [{ press: '28', times: 2 }, { press: '14:00' }],
   },
 ];
@@ -358,7 +323,7 @@ function session(
 }
 
 /** The session's length in ms, for progress bars; the tour runs about this long. */
-export const BENCH_DURATION_MS = 105_000;
+export const BENCH_DURATION_MS = 55_000;
 
 /** Runs the bench session on `canvas` and measures every frame. */
 export function runBench(
