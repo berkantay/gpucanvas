@@ -20,7 +20,7 @@ const NODES = Number(params.get('n')) || 5_000;
 /** `?hud=0` leaves only the canvas on screen, for recording footage. */
 const HUD = params.get('hud') !== '0';
 /** `?agents=0` turns off the cursors building screens. */
-const AGENTS = Number(params.get('agents') ?? 4);
+const AGENTS = Number(params.get('agents') ?? 30);
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
 /** Where the bench's close-ups land: clusters of product screens, not walls of notes. */
 /** Where the bench works: clusters of product screens, not walls of notes. */
@@ -29,8 +29,24 @@ const SHOWCASE = CLUSTERS.flatMap((cluster, id) =>
     ? [{ id, bounds: cluster.bounds, items: cluster.items }]
     : [],
 );
-/** The canvas opens on this cluster, its screens blank, and the agents build them first. */
-const INTRO = AGENTS > 0 ? (SHOWCASE[0]?.bounds ?? null) : null;
+/** How close the intro starts: near enough to watch screens being built, far enough for dozens. */
+const INTRO_ZOOM = 0.16;
+/**
+ * The canvas opens on this view, around the first product cluster, with its screens blank; the
+ * agents build them first.
+ */
+const INTRO = (() => {
+  const first = SHOWCASE[0]?.bounds;
+  if (AGENTS <= 0 || !first) return null;
+  const width = innerWidth / INTRO_ZOOM;
+  const height = innerHeight / INTRO_ZOOM;
+  return {
+    x: first.x + first.width / 2 - width / 2,
+    y: first.y + first.height / 2 - height / 2,
+    width,
+    height,
+  };
+})();
 /** Nodes mounted once the first `n` clusters are. */
 const MOUNTED_NODES = CLUSTERS.reduce<number[]>(
   (sums, cluster) => [...sums, sums[sums.length - 1] + cluster.items.length],
@@ -228,8 +244,11 @@ function App() {
           // getBoundingClientRect, which a far zoomed-out CSS scale skews into an endless
           // re-render.
           const { clientWidth: w, clientHeight: h } = instance.surface;
-          const first = INTRO ?? (MODE === 'gpu' ? BOUNDS : CLUSTERS[0].bounds);
-          instance.setCamera(fitCamera(first, w, h, 96));
+          instance.setCamera(
+            INTRO
+              ? fitCamera(INTRO, w, h, 0)
+              : fitCamera(MODE === 'gpu' ? BOUNDS : CLUSTERS[0].bounds, w, h, 96),
+          );
           setGpucanvas(instance);
           setCanvas(instance);
         }}

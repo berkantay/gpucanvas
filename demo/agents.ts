@@ -10,7 +10,8 @@ import type { Stage } from './stage';
  * CSS transition inside a live React screen, so the renderer redraws those screens while the
  * camera keeps moving.
  */
-const AGENTS = ['#d97757', '#8b5cf6', '#10b981', '#ec4899'];
+/** Every agent wears Claude's clay. */
+const COLOR = '#d97757';
 const NAME = 'Claude';
 /** The Claude mark, from simple-icons (CC0). */
 const MARK =
@@ -105,7 +106,7 @@ function selectionBox(color: string, size: string) {
 
 function statusPill() {
   return html(`<div style="position:absolute;left:50%;bottom:84px;transform:translateX(-50%);pointer-events:none;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:999px;background:rgb(24 24 27 / 0.86);color:white;font:500 13px/1 Inter Variable,sans-serif;box-shadow:0 4px 16px rgb(0 0 0 / 0.3);transition:opacity 400ms">
-    <span style="display:flex">${AGENTS.map((c, i) => `<i style="width:10px;height:10px;border-radius:50%;background:${c};border:2px solid rgb(24 24 27);margin-left:${i ? -4 : 0}px"></i>`).join('')}</span>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="${COLOR}"><path d="${MARK}"/></svg>
     <span data-text></span>
   </div>`);
 }
@@ -160,10 +161,12 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       return frame && r ? [{ node, rect: r, frame }] : [];
     });
   type Screen = ReturnType<typeof screensIn>[number];
+  /** The screens in the intro's view, the ones cut by its edges too. */
+  const introScreens = () => screensIn(intro!);
 
   /** The intro's nearest blank screen to `from`. */
   const pickIntro = (from: Point) => {
-    const blank = screensIn(intro!).filter(
+    const blank = introScreens().filter(
       (s) => !building.has(s.node) && !s.frame.classList.contains('agent-built'),
     );
     const distance = (s: Screen) =>
@@ -197,7 +200,8 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
 
   // Everything drawn over the canvas is anchored to a world point, so it rides along with the
   // camera: cursors glide between points, boxes grow from one, sparkles burst at one.
-  const agents = AGENTS.slice(0, count).map((color) => {
+  const agents = Array.from({ length: count }, () => {
+    const color = COLOR;
     const element = cursor(color);
     layer.append(element);
     const start = centre(view());
@@ -299,7 +303,7 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
 
   const progress = () => {
     if (phase !== 'intro') return;
-    const all = screensIn(intro!);
+    const all = introScreens();
     const done = all.filter(
       (s) => s.frame.classList.contains('agent-built') && !building.has(s.node),
     ).length;
@@ -369,7 +373,7 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       if (phase === 'intro') {
         const target = pickIntro(where(agent, performance.now()));
         if (target) await build(agent, target, INTRO);
-        else if (!building.size && screensIn(intro!).length) finishIntro();
+        else if (!building.size && introScreens().length) finishIntro();
         else await sleep(80);
       } else if (phase === 'waiting') {
         await sleep(100);
@@ -383,7 +387,7 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       }
     }
   };
-  agents.forEach((agent, i) => setTimeout(() => work(agent), i * (intro ? 120 : 450)));
+  agents.forEach((agent, i) => setTimeout(() => work(agent), i * (intro ? 40 : 150)));
 
   return {
     introDone,
