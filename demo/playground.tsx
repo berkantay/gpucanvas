@@ -1,5 +1,6 @@
 import { memo, type ReactNode } from 'react';
 import { Avatar } from './ui';
+import { avatar } from './art';
 import type { Rect } from '../src/index';
 import { CanvasNode } from '../src/react';
 import { KINDS, type KindName } from './items';
@@ -129,13 +130,9 @@ const TEMPLATES: Template[] = [
 ];
 
 const TOTAL_WEIGHT = TEMPLATES.reduce((sum, template) => sum + template.weight, 0);
-const AUTHORS = [
-  ['Ann', '/avatars/ann-press.webp'],
-  ['Livia', '/avatars/livia-saris.webp'],
-  ['Jaydon', '/avatars/jaydon-aminoff.webp'],
-  ['Maria', '/avatars/maria-lubin.webp'],
-  ['Kianna', '/avatars/kianna-vaccaro.webp'],
-] as const;
+const AUTHORS = ['Ann', 'Livia', 'Jaydon', 'Maria', 'Kianna'].map(
+  (name) => [name, avatar(name)] as const,
+);
 
 /** mulberry32: small, fast and the same on every engine. */
 function random(seed: number) {
