@@ -41,8 +41,14 @@ const params = new URLSearchParams(location.search);
 const gpuSupported = supportsGpuCanvas();
 const requested = parseMode(params.get('mode'));
 const MODE = requested === 'gpu' && !gpuSupported ? 'dom' : requested;
-/** Without the GPU path the DOM fallback starts smaller, so phones and other browsers keep up. */
-const NODES = Number(params.get('n')) || (gpuSupported ? 5_000 : 1_000);
+/**
+ * Phones have far less memory: thousands of live React screens get the tab killed, on the GPU path
+ * and more so as plain DOM. Without the GPU path other browsers start smaller too.
+ */
+const PHONE =
+  matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600;
+const NODES =
+  Number(params.get('n')) || (PHONE ? (gpuSupported ? 1_000 : 250) : gpuSupported ? 5_000 : 1_000);
 /** `?hud=0` leaves only the canvas on screen, for recording footage. */
 const HUD = params.get('hud') !== '0';
 /**

@@ -131,7 +131,7 @@ export const flow = (step: 1 | -1) => (event: MouseEvent<HTMLElement>) =>
 export const toast = (from: EventTarget, text: string) =>
   from.dispatchEvent(new CustomEvent(TOAST_EVENT, { bubbles: true, detail: text }));
 
-/** Shows the toasts raised inside it, along the bottom of its positioned parent. */
+/** Shows the toasts raised inside it along its bottom edge. It fills its parent. */
 export function ToastHost({ children }: { children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const [text, setText] = useState<{ value: string; id: number } | null>(null);
@@ -150,7 +150,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [text]);
   return (
-    <div ref={root} className="contents">
+    <div ref={root} className="relative h-full">
       {children}
       {text && (
         <div
