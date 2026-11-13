@@ -197,15 +197,12 @@ function App() {
     if (!canvas || mountMs === null || (AGENTS > 0 && !agents)) return;
     let cancelled = false;
     const { clientWidth: w, clientHeight: h } = canvas.surface;
-    // Once the intro's screens are built, the camera pulls out as the rest fill in.
+    // Once the intro's screens are built, the camera pulls out to everything.
     const pullOut = INTRO || MODE !== 'gpu';
     const reveal = (agents?.introDone ?? Promise.resolve()).then(() => {
       if (cancelled) return;
-      // The bench waits for the wave: the DOM canvas takes a while to settle after it.
-      return Promise.all([
-        agents?.release(1600),
-        pullOut && !cameraTouched ? flyTo(canvas, fitCamera(BOUNDS, w, h, 96), 2400) : null,
-      ]);
+      agents?.release();
+      if (pullOut && !cameraTouched) return flyTo(canvas, fitCamera(BOUNDS, w, h, 96), 2400);
     });
     reveal.then(() => {
       if (cancelled) return;
@@ -254,7 +251,7 @@ function App() {
         }}
       >
         {CLUSTERS.slice(0, progressive.mounted).map((cluster, index) => (
-          <ClusterNodes key={index} id={index} cluster={cluster} />
+          <ClusterNodes key={index} id={index} cluster={cluster} blank={INTRO} />
         ))}
       </GpuCanvas>
       {HUD && (

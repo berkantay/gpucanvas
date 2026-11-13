@@ -339,17 +339,36 @@ export function buildPlayground(nodes: number, seed = 7): { clusters: Cluster[];
 }
 
 /** Cluster `id`'s nodes; each carries `nodeClass(id, index)` so the bench can find it. */
+/** Whether a screen at `rect` opens blank, for the agents to build: it is in the opening view. */
+const inView = (rect: Rect, view: Rect | null) =>
+  !!view &&
+  rect.x < view.x + view.width &&
+  rect.x + rect.width > view.x &&
+  rect.y < view.y + view.height &&
+  rect.y + rect.height > view.y;
+
 export const ClusterNodes = memo(function ClusterNodes({
   cluster,
   id,
+  blank = null,
 }: {
   cluster: Cluster;
   id: number;
+  /** Screens in this rect start blank until an agent builds them. */
+  blank?: Rect | null;
 }) {
   return (
     <>
       {cluster.items.map((item, index) => (
-        <CanvasNode key={index} {...item.rect} className={nodeClass(id, index)}>
+        <CanvasNode
+          key={index}
+          {...item.rect}
+          className={
+            item.screen && inView(item.rect, blank)
+              ? `${nodeClass(id, index)} agent-blank`
+              : nodeClass(id, index)
+          }
+        >
           {item.render()}
         </CanvasNode>
       ))}

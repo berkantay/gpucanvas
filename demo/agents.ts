@@ -5,8 +5,8 @@ import type { Stage } from './stage';
 /**
  * Agents at work on the canvas. On load the canvas opens on one cluster of blank screens and the
  * agents build them: each cursor drags a box over a block, the block appears inside it, and the
- * cursor moves on. Then the rest of the canvas fills in as the camera pulls out, and after that
- * each agent keeps rebuilding screens near the edge of the view. Every block appears through a
+ * cursor moves on. Then the camera pulls out to everything, and after that each agent keeps
+ * rebuilding screens near the edge of the view. Every block appears through a
  * CSS transition inside a live React screen, so the renderer redraws those screens while the
  * camera keeps moving.
  */
@@ -26,7 +26,7 @@ interface Pace {
   settle: number;
   flight: number;
 }
-const INTRO: Pace = { steps: 7, reach: 140, drag: 220, settle: 60, flight: 380 };
+const INTRO: Pace = { steps: 6, reach: 110, drag: 170, settle: 40, flight: 320 };
 const AMBIENT: Pace = { steps: 10, reach: 240, drag: 340, settle: 120, flight: 700 };
 /** The middle of the view, as a share of each side, is left alone: that is where people look. */
 const FOCUS = 0.4;
@@ -36,8 +36,6 @@ const MIN_SCREEN_PX = 24;
 const MARGIN_PX = 48;
 /** The intro gives up waiting for its screens after this long. */
 const INTRO_TIMEOUT_MS = 12_000;
-/** Set on the root while the intro runs: screens nobody has built yet stay blank. */
-const INTRO_CLASS = 'agents-intro';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const ease = (t: number) => 1 - (1 - t) ** 3;
@@ -114,8 +112,8 @@ function statusPill() {
 export interface Agents {
   /** Settles once the intro's screens are built, at once when there is no intro. */
   introDone: Promise<void>;
-  /** Fills in every other blank screen, nearest first, over `ms`; then agents work as usual. */
-  release(ms: number): Promise<void>;
+  /** Shows any intro screen still blank and sets the agents to work as usual. */
+  release(): void;
   stop(): void;
 }
 
@@ -125,11 +123,8 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
     '<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1"></div>',
   );
   canvas.surface.append(layer);
-  const root = document.documentElement;
-  if (intro) root.classList.add(INTRO_CLASS);
   let phase: 'intro' | 'waiting' | 'ambient' = intro ? 'intro' : 'ambient';
   const building = new Set<HTMLElement>();
-  let built = 0;
   let stopped = false;
   const pill = statusPill();
   const pillText = pill.querySelector<HTMLElement>('[data-text]')!;
@@ -363,7 +358,6 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       frame.classList.remove('agent-building');
       frame.style.removeProperty('--agent');
       building.delete(node);
-      built++;
       progress();
     }
   };
@@ -391,28 +385,11 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
 
   return {
     introDone,
-    async release(ms) {
+    release() {
       if (phase === 'ambient') return;
       phase = 'ambient';
       if (!intro) return;
-      // The rest fills in as a wave from the intro outwards.
-      const from = centre(intro);
-      const blank = screensIn({ x: -1e9, y: -1e9, width: 2e9, height: 2e9 })
-        .filter((s) => !s.frame.classList.contains('agent-built'))
-        .map((s) => ({ ...s, d: Math.hypot(centre(s.rect).x - from.x, centre(s.rect).y - from.y) }))
-        .sort((a, b) => a.d - b.d);
-      const total = built + blank.length;
-      const batches = 24;
-      for (let b = 0; b < batches && !stopped; b++) {
-        blank
-          .slice(Math.floor((b * blank.length) / batches), Math.floor(((b + 1) * blank.length) / batches))
-          .forEach((s) => s.frame.classList.add('agent-built'));
-        const done = built + Math.floor(((b + 1) * blank.length) / batches);
-        pillText.textContent = `${count} agents · ${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} screens`;
-        await sleep(ms / batches);
-      }
-      await sleep(500);
-      root.classList.remove(INTRO_CLASS);
+      for (const s of introScreens()) s.frame.classList.add('agent-built');
       pill.style.opacity = '0';
       setTimeout(() => pill.remove(), 400);
     },
@@ -420,7 +397,6 @@ export function startAgents(canvas: Stage, count: number, intro: Rect | null): A
       stopped = true;
       cancelAnimationFrame(raf);
       layer.remove();
-      root.classList.remove(INTRO_CLASS);
     },
   };
 }

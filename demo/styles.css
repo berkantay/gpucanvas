@@ -216,10 +216,10 @@ body {
 .agent-building {
   box-shadow: 0 0 0 3px var(--agent);
 }
-/* On load, screens stay blank until an agent builds them or the wave reaches them. */
-.agents-intro .brand > * {
+/* Screens in the opening view start blank until an agent builds them. */
+.agent-blank .brand > * {
   transition: opacity 400ms ease-out;
 }
-.agents-intro .brand:not(.agent-built) > * {
+.agent-blank .brand:not(.agent-built) > * {
   opacity: 0;
 }
