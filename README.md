@@ -38,32 +38,40 @@ bun run dev        # http://localhost:5199/?mode=gpu&n=10000  (mode: auto | gpu 
 
 ## How it works
 
-1. Nodes live inside `<canvas content="drawable">`.
-2. A node that needs pixels is promoted (`drawable` attribute). In the next paint event its
-   snapshot is rasterized with `queue.drawElementImageToTexture` into a texture-array atlas, at a
-   power-of-two scale of the zoom.
-3. After that the node is parked with `display: none`. Every drawable costs Chrome layout and a
-   recording on each rendering update, so only nodes waiting for a raster stay drawable.
-4. A MutationObserver marks a node dirty when its content changes, which re-promotes it.
-5. Each frame culls nodes against the view and draws every visible one with one instanced quad
-   draw. Nodes without a snapshot yet draw as placeholders.
-6. While the camera moves, only missing snapshots are rasterized. Blurry ones are upgraded once
-   it rests, center first. Zooming out keeps the sharper snapshots.
-7. Only the node under the pointer is live (hit-testable). Pans and zooms cost no DOM work.
+1. **Pages.** Nodes are live DOM inside `<canvas content="drawable">`, packed side by side into
+   pages of 2048 CSS pixels. Chrome records a page as one snapshot, so one
+   `drawElementImageToTexture` call rasterizes dozens of nodes at once.
+2. **Rasterize, then park.** A page with nodes waiting for pixels becomes `drawable`. In the next
+   paint event it is drawn into a texture-array atlas, whole or one node at a time when only a
+   few changed. Then it is parked with `content-visibility: hidden`, which keeps layout but skips
+   paint, so the browser spends nothing on it per frame.
+3. **Thumbnails first.** Every node gets a 1/16 scale thumbnail in an atlas layer that is never
+   evicted, so a zoomed-out view of thousands of screens is always filled in. Sharper snapshots
+   go on top at power-of-two scales, so zooming reuses them.
+4. **Tiles up close.** Past 100% zoom on a 2x display, only the visible part of a node is
+   rasterized, as sharp tiles, center first. While its content animates, one half-resolution preview stands in.
+5. **One draw call.** Each frame culls nodes against the view and draws every visible one with
+   one instanced quad draw. Panning and zooming never touch the DOM. Raster work has a
+   per-frame budget, so the camera stays smooth while pixels fill in.
+6. **Live updates.** A MutationObserver marks a node dirty when its content changes, and
+   loading images, web fonts and CSS transitions trigger a redraw. Animated content on nodes
+   under 200 screen pixels refreshes at most four times a second.
+7. **Input.** Only the page under the pointer is registered for hit testing, and a CSS transform
+   puts the node under the pointer exactly where the GPU drew it. Clicks, typing, selection and
+   hover all go to the real element. A focused node keeps its page live.
 
-## Measured (M-series Mac, Chrome 157, DPR 2, 120 Hz)
+## Measured (M-series Mac, Chrome 157, 1600 x 900 window, DPR 1)
 
-The 6-second scripted path runs overview, then 100% zoom, then a pan, then overview again.
+The demo's benchmark (press `b`) runs a 94-second session: from the overview into clusters of
+app screens, close-ups up to 500% zoom, 20 clicks and typed messages, then back out. Every frame
+is timed.
 
-| Nodes  | gpu avg fps | gpu p95 | dom avg fps | dom p95  | mount gpu / dom |
-| ------ | ----------- | ------- | ----------- | -------- | --------------- |
-| 1,000  | 120         | 10.1 ms | 120         | 10.1 ms  | 1 s / 1 s       |
-| 10,000 | 98          | 16.7 ms | 85          | 17.0 ms  | 1 s / 1.3 s     |
-| 50,000 | 64          | 33.4 ms | 7           | 189.3 ms | 7 s / 13 s      |
+| Screens | gpucanvas avg fps | gpucanvas p95 | DOM avg fps | DOM p95  | Mount gpucanvas / DOM |
+| ------- | ----------------- | ------------- | ----------- | -------- | --------------------- |
+| 5,000   | 117               | 9.2 ms        | 23          | 50.2 ms  | 1.2 s / 1.3 s         |
+| 10,000  | 108               | 16.7 ms       | 9           | 133.8 ms | 1.8 s / 3.4 s         |
 
-- At 50,000 nodes the overview shows placeholders: nodes under 6 screen pixels wide are not
-  rasterized.
-- At 10,000 nodes the overview takes about 6 s to fill.
+DOM is the same screens in one CSS-transformed container, which is also the fallback backend.
 
 ## Chrome 157 findings (differ from the WICG explainer)
 
@@ -78,13 +86,16 @@ The 6-second scripted path runs overview, then 100% zoom, then a pan, then overv
 - **Newly drawable elements.** An element that just became drawable is not reported in
   `changedElements`. Its snapshot is available from the next paint event.
 - **Per-call cost.** Each `drawElementImageToTexture` call allocates and fully rasterizes, about
-  250 to 550 calls per second in total. This, not compositing, limits the fill rate.
+  250 to 550 calls per second in total. This, not compositing, limits the fill rate, which is
+  why nodes are batched into pages.
+- **Cropping.** A source rectangle still rasterizes the whole source element at the requested
+  scale before cropping. Zoomed in, a node therefore moves to a page of its own.
 - **Drawable count.** Recording cost scales with the number of drawables (and non-`display:none`
   canvas children) on every `requestPaint`. 10,000 always-drawable nodes run at 22 fps even when
   idle.
 
 ## Next
 
-- **Keyboard and accessibility.** Parked nodes are `display: none`, so Tab skips them. Needs a
-  focus model, such as a mirror or pinning the focused node.
+- **Keyboard and accessibility.** Parked pages use `content-visibility: hidden`, so Tab skips
+  their nodes. A focused node already stays live; moving focus across pages needs a focus model.
 - **Workers.** Composite in a worker with `captureElementImage`, and drive culling from the GPU.
