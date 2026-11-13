@@ -43,15 +43,61 @@ same API.
 
 ## Selection
 
-Selected nodes get an outline drawn by the GPU, 2 CSS pixels wide at any zoom.
+Select whole nodes, any element inside them, or the React component that rendered it. The GPU
+draws the outlines, 2 CSS pixels wide at any zoom, and they follow their element's layout.
 
 ```ts
-const hits = canvas.getNodesIn({ x, y, width, height }); // world units, such as a selection box
-canvas.setSelection(hits); // replaces the selection; [] clears it
+import { bindSelection } from 'gpucanvas';
+
+const selection = bindSelection(canvas, {
+  pick: 'element', // 'node' (default), 'element', or a function
+  onChange: (selected) => console.log(selected),
+});
 ```
 
-The color is the `selectionColor` option. Shift-drags on the background don't pan, so an app
-can use them for a selection box, as the demo does.
+By default clicks still reach your components. Shift-click selects, or adds to and removes from
+the selection. Shift-drag draws a box that selects the nodes it touches. Holding shift outlines
+what a click would select. A click on the background or Escape clears. With
+`trigger: 'click'`, every click selects, for an edit mode.
+
+`pick` decides what a click selects:
+
+- `'node'`: the whole node.
+- `'element'`: the deepest element under the pointer.
+- a function of that element, such as `(el) => el.closest('[data-component]')`. It can return
+  several elements.
+
+In React, `useSelection` gives the selection as state, and `componentOf` finds the component
+that rendered an element:
+
+```tsx
+import { componentOf, useSelection } from 'gpucanvas/react';
+
+// Inside <GpuCanvas>:
+const { selected, clear } = useSelection({
+  pick: (el) => componentOf(el)?.elements ?? null,
+});
+componentOf(selected[0]); // { name: 'Button', elements: [<button>] }
+```
+
+`componentOf` reads React's internal fibers, as click-to-component tools do. Production builds
+usually minify component names, so mark components with your own attributes when you need
+names there.
+
+The building blocks, for your own interactions:
+
+```ts
+canvas.getElementAt(point); // deepest element at a world point
+canvas.getElementRect(el); // any element's rect in world units
+canvas.getNodeOf(el); // the node that holds it
+canvas.getNodesIn(rect); // nodes overlapping a world rect
+canvas.setSelection(elements); // outline these; [] clears
+canvas.setHover(el); // a lighter outline; null clears
+canvas.screenToWorld(point); // surface pixels to world units, and worldToScreen back
+```
+
+Colors are the `selectionColor` and `hoverColor` options. The demo takes `?pick=node`,
+`element` or `component`.
 
 ## Run the demo
 

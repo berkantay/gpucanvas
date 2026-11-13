@@ -1,4 +1,4 @@
-import type { Camera, Rect } from './camera';
+import type { Camera, Point, Rect } from './camera';
 
 export type GpuCanvasMode = 'gpu' | 'dom';
 
@@ -7,8 +7,10 @@ export interface GpuCanvasOptions {
   mode?: 'auto' | GpuCanvasMode;
   /** Canvas background, any CSS color. */
   background?: string;
-  /** Outline of selected nodes, any CSS color. Default `#4f8cff`. */
+  /** Outline of selected elements, any CSS color. Default `#4f8cff`. */
   selectionColor?: string;
+  /** Outline of the hovered element, any CSS color. Default: the selection color. */
+  hoverColor?: string;
   camera?: Camera;
   /** Side of each atlas layer in texels. Default 4096, capped by the device. */
   atlasSize?: number;
@@ -69,10 +71,25 @@ export interface GpuCanvas {
   getNodeRect(element: HTMLElement): Rect | null;
   /** Nodes that overlap `rect` (world units), such as the ones under a selection box. */
   getNodesIn(rect: Rect): HTMLElement[];
-  /** Outlines these nodes as selected, replacing the previous selection. Pass `[]` to clear. */
-  setSelection(elements: Iterable<HTMLElement>): void;
+  /** The node that holds `element`: the element itself when it is a node, or null. */
+  getNodeOf(element: Element): HTMLElement | null;
+  /** Where any element on the canvas sits, a node or anything inside one, in world units. */
+  getElementRect(element: Element): Rect | null;
+  /** The deepest element under the world point `point`, in the topmost node there. */
+  getElementAt(point: Point): Element | null;
+  /**
+   * Outlines these elements as selected, replacing the previous selection. They can be nodes or
+   * anything inside them, and the outlines follow their layout. Pass `[]` to clear.
+   */
+  setSelection(elements: Iterable<Element>): void;
+  /** Outlines one element more lightly, such as the one under the pointer. Pass null to clear. */
+  setHover(element: Element | null): void;
   getCamera(): Camera;
   setCamera(camera: Camera): void;
+  /** A point in surface pixels as world units, under the current camera. */
+  screenToWorld(point: Point): Point;
+  /** A world point as surface pixels, under the current camera. */
+  worldToScreen(point: Point): Point;
   /**
    * Redraws every node. Call it after a change the nodes' own DOM does not show, such as a theme
    * class on `<html>` or a web font finishing loading.
@@ -90,3 +107,5 @@ export const DEFAULT_CAMERA: Camera = { x: 0, y: 0, zoom: 1 };
 export const DEFAULT_SELECTION_COLOR = '#4f8cff';
 /** Width of the selection outline, in CSS pixels at any zoom. */
 export const SELECTION_WIDTH = 2;
+/** Width of the hover outline, in CSS pixels at any zoom. */
+export const HOVER_WIDTH = 1;

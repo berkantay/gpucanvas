@@ -3,12 +3,17 @@ import './styles.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { fitCamera, supportsGpuCanvas, type GpuCanvas as GpuCanvasInstance } from '../src/index';
-import { GpuCanvas } from '../src/react';
+import {
+  bindSelection,
+  fitCamera,
+  supportsGpuCanvas,
+  type GpuCanvas as GpuCanvasInstance,
+  type SelectionPick,
+} from '../src/index';
+import { componentOf, GpuCanvas } from '../src/react';
 import { flyTo, loadResults, runBench, saveResult, type BenchResult } from './bench';
 import { FlagNotice, Hints, Meter, NODE_COUNTS, Results, Toolbar } from './hud';
 import { startAgents, type Agents } from './agents';
-import { bindMarquee } from './marquee';
 import { buildPlayground, ClusterNodes } from './playground';
 import { parseMode, type Stage } from './stage';
 
@@ -22,6 +27,13 @@ const NODES = Number(params.get('n')) || (gpuSupported ? 5_000 : 1_000);
 const HUD = params.get('hud') !== '0';
 /** `?agents=0` turns off the cursors building screens. */
 const AGENTS = Number(params.get('agents') ?? 30);
+/** What a shift-click selects: `?pick=node` (a whole screen), `element` or `component`. */
+const PICKS: Record<string, SelectionPick> = {
+  node: 'node',
+  element: 'element',
+  component: (element) => componentOf(element)?.elements ?? null,
+};
+const PICK = PICKS[params.get('pick') ?? 'node'] ?? 'node';
 const { clusters: CLUSTERS, bounds: BOUNDS } = buildPlayground(NODES);
 /** Where the bench's close-ups land: clusters of product screens, not walls of notes. */
 /** Where the bench works: clusters of product screens, not walls of notes. */
@@ -215,7 +227,11 @@ function App() {
     };
   }, [canvas, mountMs, agents]);
 
-  useEffect(() => (canvas ? bindMarquee(canvas) : undefined), [canvas]);
+  useEffect(() => {
+    if (!gpucanvas) return;
+    const selection = bindSelection(gpucanvas, { pick: PICK });
+    return () => selection.destroy();
+  }, [gpucanvas]);
 
   useEffect(() => {
     if (!canvas || mountMs === null) return;

@@ -1,5 +1,5 @@
 import { fitCamera, type Camera, type Rect } from '../src/index';
-import { createMarquee } from './marquee';
+import { createMarquee } from '../src/selection';
 import type { Mode, Stage } from './stage';
 
 export interface BenchResult {

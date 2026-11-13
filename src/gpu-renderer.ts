@@ -6,14 +6,14 @@ export const FLOATS_PER_INSTANCE = 12;
 
 /**
  * Draws every visible node in one instanced draw call. The caller fills `instances` with
- * FLOATS_PER_INSTANCE floats per node: world rect, atlas texel rect, then layer and kind
- * (0 snapshot, 1 placeholder, 2 selection ring).
+ * FLOATS_PER_INSTANCE floats per quad: world rect, atlas texel rect (a ring's color), then layer,
+ * kind (0 snapshot, 1 placeholder, 2 ring) and ring width.
  */
 export class CompositeRenderer {
   instances = new Float32Array(FLOATS_PER_INSTANCE * 4096);
   private instanceBuffer: GPUBuffer;
   private readonly uniforms: GPUBuffer;
-  private readonly uniformData = new Float32Array(16);
+  private readonly uniformData = new Float32Array(12);
   private readonly pipeline: GPURenderPipeline;
   private readonly bindGroup: GPUBindGroup;
 
@@ -24,8 +24,6 @@ export class CompositeRenderer {
     private readonly atlas: Atlas,
     public background: [number, number, number, number],
     public placeholder: [number, number, number, number],
-    public selection: [number, number, number, number],
-    private readonly outline: number,
   ) {
     const module = device.createShaderModule({
       label: 'gpucanvas composite',
@@ -102,9 +100,8 @@ export class CompositeRenderer {
       camera.zoom,
       dpr,
       this.atlas.size,
-      this.outline,
+      0,
       ...this.placeholder,
-      ...this.selection,
     ]);
     device.queue.writeBuffer(this.uniforms, 0, this.uniformData);
     if (count > 0) {

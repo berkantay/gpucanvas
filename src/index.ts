@@ -2,8 +2,10 @@ import { createDomCanvas } from './dom-backend';
 import { createGpuCanvas as createGpuBackend, supportsGpuCanvas } from './gpu-backend';
 import type { GpuCanvas, GpuCanvasOptions } from './types';
 
-export type { Camera, Rect } from './camera';
-export { fitCamera, zoomAt } from './camera';
+export type { Camera, Point, Rect } from './camera';
+export { fitCamera, screenToWorld, worldToScreen, zoomAt } from './camera';
+export type { Selection, SelectionOptions, SelectionPick } from './selection';
+export { bindSelection } from './selection';
 export type { GpuCanvas, GpuCanvasMode, GpuCanvasOptions, GpuCanvasStats } from './types';
 export { supportsGpuCanvas };
 

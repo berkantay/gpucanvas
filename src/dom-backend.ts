@@ -1,15 +1,20 @@
 import {
   bindCameraInput,
+  containsPoint,
   fitCamera,
   intersects,
+  screenToWorld,
   visibleWorldRect,
+  worldToScreen,
   type Camera,
   type Rect,
 } from './camera';
+import { elementInNode, nodeOfElement, rectInNode } from './elements';
 import { applyNodeBase, applyNodeSize, boundsOf } from './node-style';
 import {
   DEFAULT_CAMERA,
   DEFAULT_SELECTION_COLOR,
+  HOVER_WIDTH,
   SELECTION_WIDTH,
   type GpuCanvas,
   type GpuCanvasOptions,
@@ -39,15 +44,78 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     transformOrigin: '0 0',
     willChange: 'transform',
   });
+  // Outlines of elements inside nodes, above every node.
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style, { position: 'absolute', left: '0', top: '0', zIndex: '1' });
+  world.append(overlay);
   surface.append(world);
   host.append(surface);
 
   const nodes = new Map<HTMLElement, Rect>();
-  let selected = new Set<HTMLElement>();
   // Outlines live inside the zoomed world, so their width divides the zoom back out.
-  const outline = `calc(${SELECTION_WIDTH}px / var(--gpucanvas-zoom)) solid ${
-    options.selectionColor ?? DEFAULT_SELECTION_COLOR
-  }`;
+  const ring = (color: string, width: number) =>
+    `calc(${width}px / var(--gpucanvas-zoom)) solid ${color}`;
+  const selectionColor = options.selectionColor ?? DEFAULT_SELECTION_COLOR;
+  const selectionRing = ring(selectionColor, SELECTION_WIDTH);
+  const hoverRing = ring(options.hoverColor ?? selectionColor, HOVER_WIDTH);
+  let selection = new Set<Element>();
+  let hovered: Element | null = null;
+  /** Nodes wearing an outline, and boxes standing in for the outlines of elements inside nodes. */
+  let outlinedNodes = new Set<HTMLElement>();
+  const boxes = new Map<Element, HTMLElement>();
+  const elementRect = (element: Element): Rect | null => {
+    const node = element.isConnected ? nodeOfElement(nodes, element) : null;
+    return node ? rectInNode(node, nodes.get(node)!, element) : null;
+  };
+  // Boxes follow their elements' layout every frame while there are any.
+  let boxFrame = 0;
+  const placeBoxes = () => {
+    boxFrame = boxes.size ? requestAnimationFrame(placeBoxes) : 0;
+    for (const [element, box] of boxes) {
+      const rect = elementRect(element);
+      box.style.display = rect ? 'block' : 'none';
+      if (rect) {
+        box.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
+        box.style.width = `${rect.width}px`;
+        box.style.height = `${rect.height}px`;
+      }
+    }
+  };
+  const drawOutlines = () => {
+    const wanted = new Map<Element, string>();
+    for (const element of selection) wanted.set(element, selectionRing);
+    if (hovered && !wanted.has(hovered)) wanted.set(hovered, hoverRing);
+    const nextNodes = new Set<HTMLElement>();
+    for (const [element, outline] of wanted) {
+      if (!nodes.has(element as HTMLElement)) continue;
+      (element as HTMLElement).style.outline = outline;
+      nextNodes.add(element as HTMLElement);
+    }
+    for (const node of outlinedNodes) if (!nextNodes.has(node)) node.style.outline = '';
+    outlinedNodes = nextNodes;
+    for (const [element, box] of boxes) {
+      if (wanted.has(element)) continue;
+      box.remove();
+      boxes.delete(element);
+    }
+    for (const [element, outline] of wanted) {
+      if (nodes.has(element as HTMLElement)) continue;
+      let box = boxes.get(element);
+      if (!box) {
+        box = document.createElement('div');
+        Object.assign(box.style, {
+          position: 'absolute',
+          left: '0',
+          top: '0',
+          pointerEvents: 'none',
+        });
+        overlay.append(box);
+        boxes.set(element, box);
+      }
+      box.style.outline = outline;
+    }
+    if (boxes.size && !boxFrame) placeBoxes();
+  };
   let camera = options.camera ?? DEFAULT_CAMERA;
   let frameMs = 0;
 
@@ -83,21 +151,35 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     },
     removeNode(element) {
       nodes.delete(element);
-      selected.delete(element);
+      outlinedNodes.delete(element);
+      element.style.outline = '';
       element.remove();
     },
     getNodeRect: (element) => nodes.get(element) ?? null,
     getNodesIn(rect) {
       return [...nodes].filter(([, node]) => intersects(node, rect)).map(([element]) => element);
     },
+    getNodeOf: (element) => nodeOfElement(nodes, element),
+    getElementRect: elementRect,
+    getElementAt(point) {
+      // The last node added draws on top.
+      let top: HTMLElement | null = null;
+      for (const [element, rect] of nodes) if (containsPoint(rect, point)) top = element;
+      return top ? elementInNode(top, nodes.get(top)!, point) : null;
+    },
     setSelection(elements) {
-      const next = new Set([...elements].filter((element) => nodes.has(element)));
-      for (const element of selected) if (!next.has(element)) element.style.outline = '';
-      for (const element of next) if (!selected.has(element)) element.style.outline = outline;
-      selected = next;
+      selection = new Set(elements);
+      drawOutlines();
+    },
+    setHover(element) {
+      if (element === hovered) return;
+      hovered = element;
+      drawOutlines();
     },
     getCamera: () => camera,
     setCamera,
+    screenToWorld: (point) => screenToWorld(camera, point),
+    worldToScreen: (point) => worldToScreen(camera, point),
     // The browser repaints DOM nodes itself.
     invalidate() {},
     setBackground(color) {
@@ -123,6 +205,7 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
       };
     },
     destroy() {
+      cancelAnimationFrame(boxFrame);
       unbindInput();
       surface.remove();
     },

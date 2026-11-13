@@ -1,5 +1,5 @@
 import type { Rect } from '../src/index';
-import type { Point } from './marquee';
+import type { Point } from '../src/index';
 import type { Stage } from './stage';
 
 /**

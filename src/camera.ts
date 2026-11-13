@@ -12,6 +12,23 @@ export interface Rect {
   height: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** A point in surface pixels (from the surface's top left) as world units. */
+export const screenToWorld = (camera: Camera, point: Point): Point => ({
+  x: camera.x + point.x / camera.zoom,
+  y: camera.y + point.y / camera.zoom,
+});
+
+/** A world point as surface pixels. */
+export const worldToScreen = (camera: Camera, point: Point): Point => ({
+  x: (point.x - camera.x) * camera.zoom,
+  y: (point.y - camera.y) * camera.zoom,
+});
+
 export const MIN_ZOOM = 0.02;
 export const MAX_ZOOM = 16;
 
@@ -37,6 +54,12 @@ export function visibleWorldRect(
     height: viewportHeight / camera.zoom,
   };
 }
+
+export const containsPoint = (rect: Rect, point: Point) =>
+  point.x >= rect.x &&
+  point.x < rect.x + rect.width &&
+  point.y >= rect.y &&
+  point.y < rect.y + rect.height;
 
 export const intersects = (a: Rect, b: Rect) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;

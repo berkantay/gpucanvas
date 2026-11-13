@@ -1,18 +1,23 @@
 import { Atlas, type AtlasSlot } from './atlas';
 import {
   bindCameraInput,
+  containsPoint,
   fitCamera,
   intersects,
+  screenToWorld,
   visibleWorldRect,
+  worldToScreen,
   type Camera,
   type Rect,
 } from './camera';
+import { elementInNode, nodeOfElement, rectInNode } from './elements';
 import { CompositeRenderer, FLOATS_PER_INSTANCE } from './gpu-renderer';
 import { boundsOf } from './node-style';
 import { Page } from './page';
 import {
   DEFAULT_CAMERA,
   DEFAULT_SELECTION_COLOR,
+  HOVER_WIDTH,
   SELECTION_WIDTH,
   type GpuCanvas,
   type GpuCanvasOptions,
@@ -280,12 +285,30 @@ export async function createGpuCanvas(
     format,
     atlas,
     ...colorsFor(options.background ?? '#f4f4f5'),
-    premultiplied(cssColorToRgba(options.selectionColor ?? DEFAULT_SELECTION_COLOR)),
-    SELECTION_WIDTH,
   );
+  const selectionColor = premultiplied(
+    cssColorToRgba(options.selectionColor ?? DEFAULT_SELECTION_COLOR),
+  );
+  const hoverColor = options.hoverColor
+    ? premultiplied(cssColorToRgba(options.hoverColor))
+    : selectionColor;
 
   const nodes = new Map<HTMLElement, Node>();
-  const selected = new Set<Node>();
+  /** Outlined elements: nodes or anything inside them. */
+  let selection = new Set<Element>();
+  let hovered: Element | null = null;
+  /** World rects of outlined elements inside nodes, measured once until their layout changes. */
+  const ringRects = new Map<Element, Rect>();
+  const ringRect = (element: Element): Rect | null => {
+    const own = nodes.get(element as HTMLElement);
+    if (own) return own.rect;
+    const at = element.isConnected ? nodeOfElement(nodes, element) : null;
+    if (!at) return null;
+    const node = nodes.get(at)!;
+    let rect = ringRects.get(element);
+    if (!rect) ringRects.set(element, (rect = rectInNode(at, node.rect, element)));
+    return rect;
+  };
   const pages = new Map<Page, Set<Node>>();
   // What is on screen survives a full atlas: whole snapshots first, then sharp tiles.
   atlas.keep = function* () {
@@ -786,8 +809,8 @@ export async function createGpuCanvas(
 
   const composite = () => {
     let instances = visible.length;
-    for (const node of visible)
-      instances += node.tiles.length + (node.preview ? 1 : 0) + (selected.has(node) ? 1 : 0);
+    for (const node of visible) instances += node.tiles.length + (node.preview ? 1 : 0);
+    instances += selection.size + 1;
     renderer.reserve(instances);
     const data = renderer.instances;
     let count = 0;
@@ -809,10 +832,17 @@ export async function createGpuCanvas(
         data[offset + 9] = 1;
       }
     };
-    const pushRing = (rect: Rect) => {
+    const pushRing = (element: Element, color: number[], width: number) => {
+      const rect = ringRect(element);
+      if (!rect || !intersects(rect, frameView)) return;
       const offset = count++ * FLOATS_PER_INSTANCE;
-      data.set([rect.x, rect.y, rect.width, rect.height], offset);
+      data[offset] = rect.x;
+      data[offset + 1] = rect.y;
+      data[offset + 2] = rect.width;
+      data[offset + 3] = rect.height;
+      data.set(color, offset + 4);
       data[offset + 9] = 2;
+      data[offset + 10] = width;
     };
     let onThumbnail = 0;
     for (const node of visible) {
@@ -844,8 +874,9 @@ export async function createGpuCanvas(
         if (current(tile) && atlas.isValid(tile.slot)) push(tile.rect, tile.slot);
     }
     stats.onThumbnail = onThumbnail;
-    // Selection rings last, so no neighbor covers them.
-    if (selected.size) for (const node of visible) if (selected.has(node)) pushRing(node.rect);
+    // Outlines last, so no neighbor covers them, and hover over the selection.
+    for (const element of selection) pushRing(element, selectionColor, SELECTION_WIDTH);
+    if (hovered && !selection.has(hovered)) pushRing(hovered, hoverColor, HOVER_WIDTH);
     const cssWidth = canvas.clientWidth;
     const dpr = canvas.width / Math.max(1, cssWidth);
     renderer.draw(camera, cssWidth, canvas.clientHeight, dpr, count);
@@ -922,6 +953,7 @@ export async function createGpuCanvas(
         }
       }
     }
+    if (changed) ringRects.clear();
     if (!awaitingPaint && !changed) return;
     awaitingPaint = false;
     frame(true);
@@ -941,6 +973,8 @@ export async function createGpuCanvas(
   // Content changes on any node, drawable or parked. Style that gpucanvas writes on page and
   // node elements is ignored.
   const mutations = new MutationObserver((records) => {
+    // Outlined elements may have moved inside their nodes.
+    ringRects.clear();
     let changed = false;
     for (const record of records) {
       const target = record.target as HTMLElement;
@@ -1041,13 +1075,9 @@ export async function createGpuCanvas(
   /** Makes the topmost node under the last pointer position live. */
   const pickLive = () => {
     if (!pointer) return setLive(null);
-    const worldX = camera.x + pointer.x / camera.zoom;
-    const worldY = camera.y + pointer.y / camera.zoom;
+    const point = screenToWorld(camera, pointer);
     let hit: Node | null = null;
-    for (const node of nodes.values()) {
-      const { x, y, width, height } = node.rect;
-      if (worldX >= x && worldX < x + width && worldY >= y && worldY < y + height) hit = node;
-    }
+    for (const node of nodes.values()) if (containsPoint(node.rect, point)) hit = node;
     setLive(hit);
   };
 
@@ -1285,6 +1315,7 @@ export async function createGpuCanvas(
       if (!node) return;
       const resized = node.rect.width !== rect.width || node.rect.height !== rect.height;
       node.rect = rect;
+      ringRects.clear();
       if (resized) {
         if (live === node) setLive(null);
         releaseNode(node);
@@ -1299,7 +1330,7 @@ export async function createGpuCanvas(
       if (lingering === node) lingering = null;
       if (focused === node) focused = null;
       transitioning.delete(node);
-      selected.delete(node);
+      selection.delete(element);
       nodes.delete(element);
       releaseNode(node);
       element.remove();
@@ -1314,14 +1345,30 @@ export async function createGpuCanvas(
       for (const node of nodes.values()) if (intersects(node.rect, rect)) hits.push(node.element);
       return hits;
     },
+    getNodeOf: (element) => nodeOfElement(nodes, element),
+    getElementRect(element) {
+      const rect = ringRect(element);
+      return rect ? { ...rect } : null;
+    },
+    getElementAt(point) {
+      // The last node added draws on top.
+      let top: Node | null = null;
+      for (const node of nodes.values()) if (containsPoint(node.rect, point)) top = node;
+      return top ? elementInNode(top.element, top.rect, point) : null;
+    },
     setSelection(elements) {
-      selected.clear();
-      for (const element of elements) {
-        const node = nodes.get(element);
-        if (node) selected.add(node);
-      }
+      selection = new Set(elements);
+      ringRects.clear();
       schedule();
     },
+    setHover(element) {
+      if (element === hovered) return;
+      hovered = element;
+      ringRects.clear();
+      schedule();
+    },
+    screenToWorld: (point) => screenToWorld(camera, point),
+    worldToScreen: (point) => worldToScreen(camera, point),
     getCamera: () => camera,
     setCamera,
     invalidate: onFontsLoaded,
