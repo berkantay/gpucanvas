@@ -3,8 +3,10 @@ import {
   RiCloseLine,
   RiCursorLine,
   RiEqualizerLine,
+  RiGithubFill,
   RiMoonLine,
   RiPlayFill,
+  RiStarFill,
   RiSunLine,
 } from '@remixicon/react';
 import {
@@ -80,6 +82,7 @@ export function Toolbar({
     : [...NODE_COUNTS, nodes].sort((a, b) => a - b);
   // On a phone the bar shows the logo and Edit or Interact; the rest opens below them.
   const [expanded, setExpanded] = useState(false);
+  const stars = useStars();
   const more = cx('contents', !expanded && 'max-sm:hidden');
   return (
     <div
@@ -192,6 +195,11 @@ export function Toolbar({
           onClick={onTheme}
         />
       </span>
+      <GitHubLink stars={stars} className="sm:hidden" />
+      <GitHubLink
+        stars={stars}
+        className={cx(PANEL, 'fixed right-4 bottom-4 z-10 h-11 ring-0 max-sm:hidden')}
+      />
       <IconButton
         icon={expanded ? RiCloseLine : RiEqualizerLine}
         aria-label="More controls"
@@ -212,6 +220,45 @@ function Logo() {
       <rect x="6" y="13" width="5" height="5" rx="1.5" className="fill-white/60" />
       <rect x="13" y="13" width="5" height="5" rx="1.5" className="fill-white/30" />
     </svg>
+  );
+}
+
+/** The repository's star count, once GitHub answers. */
+function useStars() {
+  const [stars, setStars] = useState<number | null>(null);
+  useEffect(() => {
+    fetch(REPO.replace('github.com/', 'api.github.com/repos/'))
+      .then((response) => (response.ok ? response.json() : null))
+      .then((repo) => typeof repo?.stargazers_count === 'number' && setStars(repo.stargazers_count))
+      .catch(() => {});
+  }, []);
+  return stars;
+}
+
+/** A link to the repository with its star count: in the toolbar on phones, bottom right otherwise. */
+function GitHubLink({ stars, className }: { stars: number | null; className?: string }) {
+  return (
+    <a
+      href={REPO}
+      target="_blank"
+      rel="noreferrer"
+      title="gpucanvas on GitHub"
+      className={cx(
+        'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-body-2-medium text-text-primary ring-1 ring-border-button-default hover:bg-background-secondary-default',
+        className,
+      )}
+    >
+      <RiGithubFill className="size-5" aria-hidden />
+      {stars === null ? (
+        'GitHub'
+      ) : (
+        <>
+          <RiStarFill className="size-4 text-yellow-400" aria-hidden />
+          <span className="tabular-nums">{format(stars)}</span>
+          <span className="sr-only">stars on GitHub</span>
+        </>
+      )}
+    </a>
   );
 }
 
