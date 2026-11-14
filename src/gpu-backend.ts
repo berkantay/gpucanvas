@@ -167,6 +167,14 @@ const DIRTY = 1;
 const BLURRY = 2;
 const OVERSAMPLED = 3;
 
+/**
+ * Chrome 157 ships `getElementImageDefaultSize` together with hit testing at the canvas
+ * transform set by `updateElementGeometry`; Chrome 156 has neither.
+ */
+const CANVAS_TRANSFORM_HIT_TESTS =
+  typeof HTMLCanvasElement !== 'undefined' &&
+  'getElementImageDefaultSize' in HTMLCanvasElement.prototype;
+
 export function supportsGpuCanvas(): boolean {
   return (
     typeof navigator !== 'undefined' &&
@@ -229,9 +237,9 @@ const distanceToCenter = (rect: Rect, view: Rect) =>
  * requestAnimationFrame and draws every visible node in one instanced call, so panning and
  * zooming never touch the DOM.
  *
- * Hit testing (Chrome 157): only drawables registered with `updateElementGeometry` are hit
- * tested, at their CSS position. Only the page under the pointer is registered, and its CSS
- * transform puts the node under the pointer exactly where the GPU drew it.
+ * Hit testing: only drawables registered with `updateElementGeometry` are hit tested. Only the
+ * page under the pointer is registered, and its canvas transform (Chrome 157) or CSS transform
+ * (Chrome 156) puts the node under the pointer exactly where the GPU drew it.
  */
 export async function createGpuCanvas(
   host: HTMLElement,
@@ -1148,26 +1156,29 @@ export async function createGpuCanvas(
   };
 
   /**
-   * Puts the live page's hit area under the live node. The draw matrix maps the page's
-   * default-size snapshot (CSS px x dpr) to canvas pixels. A page promoted this frame has no
-   * paint record yet, so it is positioned on the next frame.
+   * Puts the live page's hit area under the live node. Chrome 157 hit tests at the canvas
+   * transform given to `updateElementGeometry`, in CSS pixels. Chrome 156 ignores it and hit
+   * tests at the CSS box, so the page gets the CSS transform `getElementTransform` derives from
+   * the draw matrix, which maps the default-size snapshot (CSS px x dpr) to canvas pixels. A page
+   * promoted this frame has no paint record there yet, so it is positioned on the next frame.
    */
   const positionLivePage = () => {
     if (!live || livePositioned) return;
-    const dpr = canvas.width / Math.max(1, canvas.clientWidth);
     const { zoom } = camera;
-    const drawn = new DOMMatrix([
-      zoom,
-      0,
-      0,
-      zoom,
-      ((live.rect.x - camera.x) * zoom - live.pageX * zoom) * dpr,
-      ((live.rect.y - camera.y) * zoom - live.pageY * zoom) * dpr,
-    ]);
+    const x = (live.rect.x - camera.x - live.pageX) * zoom;
+    const y = (live.rect.y - camera.y - live.pageY) * zoom;
     try {
-      live.page.element.style.transform = canvas
-        .getElementTransform(live.page.element, drawn)
-        .toString();
+      if (CANVAS_TRANSFORM_HIT_TESTS) {
+        canvas.updateElementGeometry(live.page.element, {
+          canvasTransform: new DOMMatrix([zoom, 0, 0, zoom, x, y]),
+        });
+      } else {
+        const dpr = canvas.width / Math.max(1, canvas.clientWidth);
+        const drawn = new DOMMatrix([zoom, 0, 0, zoom, x * dpr, y * dpr]);
+        live.page.element.style.transform = canvas
+          .getElementTransform(live.page.element, drawn)
+          .toString();
+      }
       live.element.style.pointerEvents = 'auto';
       livePositioned = true;
     } catch {

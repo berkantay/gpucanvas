@@ -336,8 +336,8 @@ to npm from GitHub Actions, with provenance, through npm trusted publishing. See
 6. **Live updates.** A MutationObserver marks a node dirty when its content changes, and
    loading images, web fonts and CSS transitions trigger a redraw. Animated content on nodes
    under 200 screen pixels refreshes at most four times a second.
-7. **Input.** Only the page under the pointer is registered for hit testing, and a CSS transform
-   puts the node under the pointer exactly where the GPU drew it. Clicks, typing, selection and
+7. **Input.** Only the page under the pointer is registered for hit testing, and its canvas
+   transform puts the node under the pointer exactly where the GPU drew it. Clicks, typing, selection and
    hover all go to the real element. A focused node keeps its page live. Touch has no hover, so a
    tap makes the node under the finger live and hands the click to the element it landed on. A
    two-finger pinch zooms and pans the camera wherever the fingers land.
@@ -376,11 +376,11 @@ so a gap of a few percent, like frost above none, is noise rather than a speedup
 ## Chrome 157 findings (differ from the WICG explainer)
 
 - **Hit-test registration.** A drawable is hit-tested only after
-  `canvas.updateElementGeometry(el, {})` registers it. The `canvasTransform` option does not
-  move the hit area.
-- **Hit-test position.** The hit area is the element's CSS box, so position it with
-  `el.style.transform = canvas.getElementTransform(el, drawMatrix)`. The draw matrix maps the
-  element's default-size snapshot (CSS px × DPR) to canvas pixels.
+  `canvas.updateElementGeometry(el, options)` registers it.
+- **Hit-test position.** Chrome 157 hit tests at `options.canvasTransform`, a matrix in CSS
+  pixels from the element's border box to the canvas, and `getElementTransform(el)` returns it.
+  Chrome 156 ignored `canvasTransform` and hit tested at the CSS box, positioned with
+  `el.style.transform = canvas.getElementTransform(el, drawMatrix)`. gpucanvas handles both.
 - **Transform changes.** Changing a drawable's CSS transform or pointer-events reports it in
   `changedElements`.
 - **Newly drawable elements.** An element that just became drawable is not reported in

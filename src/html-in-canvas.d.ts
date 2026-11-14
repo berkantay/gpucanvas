@@ -18,10 +18,13 @@ interface HTMLCanvasElement {
   updateElementGeometry(element: Element, options?: UpdateElementGeometryOptions): void;
   clearElementGeometry(element: Element): void;
   /**
-   * Chrome 157: given where the element was drawn (canvas pixels), returns the CSS transform
-   * that puts the live element in the same place, for hit testing and accessibility.
+   * Chrome 157 returns the canvas transform set by `updateElementGeometry`, or identity. Chrome
+   * 156 takes where the element was drawn (canvas pixels) and returns the CSS transform that puts
+   * the live element in the same place.
    */
-  getElementTransform(element: Element, drawTransform: DOMMatrix): DOMMatrix;
+  getElementTransform(element: Element, drawTransform?: DOMMatrix): DOMMatrix;
+  /** Chrome 157: the element's default snapshot size in canvas grid coordinates. */
+  getElementImageDefaultSize?(element: Element): { width: number; height: number };
 }
 
 interface GPUDrawElementImageSource {
