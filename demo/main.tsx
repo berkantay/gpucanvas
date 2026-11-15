@@ -28,7 +28,7 @@ import { buildPlayground, ClusterNodes } from './playground';
 import { initial, NODE_COUNTS, reloadWith, rememberToolbar, type Pick } from './settings';
 import { handleShortcut } from './shortcuts';
 import { applyTheme, backgroundColor, readTheme, saveTheme } from './theme';
-import { saveSnapshot } from './snapshot';
+import { saveSnapshot, snapshotFallback } from './snapshot';
 import { followFlows } from './flow';
 
 const gpuSupported = supportsGpuCanvas();
@@ -336,6 +336,7 @@ function App() {
       <GpuCanvas
         mode={MODE}
         background={backgroundColor()}
+        snapshotFallback={snapshotFallback}
         className="h-screen w-screen"
         onReady={(instance) => {
           window.gpucanvas = instance;

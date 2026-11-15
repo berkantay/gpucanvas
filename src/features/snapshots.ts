@@ -119,7 +119,7 @@ export function recordFilmstrip(
         onFrame?.(frame, frames);
       })
       .catch((error) => {
-        // Once per filmstrip: on the DOM backend every snapshot fails the same way.
+        // Once per filmstrip: a DOM backend with no `snapshotFallback` fails every snapshot the same way.
         if (warned) return;
         warned = true;
         console.warn('gpucanvas: filmstrip snapshot failed', error);

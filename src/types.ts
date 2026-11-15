@@ -27,6 +27,12 @@ export interface GpuCanvasOptions {
   /** Side of a page, the unit nodes are batched into for rasterizing, in CSS pixels. Default 2048. */
   pageSize?: number;
   onCameraChange?: (camera: Camera) => void;
+  /**
+   * Draws `snapshot` on the DOM backend, which cannot draw a node itself: return the node's
+   * pixels at `scale` texels per CSS pixel, with straight alpha. Any DOM-to-image library fits.
+   * The GPU backend never calls it.
+   */
+  snapshotFallback?: (node: HTMLElement, options: { scale: number }) => Promise<ImageData>;
 }
 
 export interface GpuCanvasStats {
@@ -108,7 +114,8 @@ export interface GpuCanvas {
   invalidate(): void;
   /**
    * The node's pixels as it looks now, drawn fresh at `scale` texels per CSS pixel (default the
-   * device pixel ratio), with straight alpha. GPU backend only: the DOM backend rejects.
+   * device pixel ratio), with straight alpha. The DOM backend draws it with
+   * `options.snapshotFallback`, and rejects without one.
    */
   snapshot(node: HTMLElement, options?: { scale?: number }): Promise<ImageData>;
   /** Changes the canvas background, any CSS color. */

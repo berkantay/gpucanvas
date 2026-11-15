@@ -235,7 +235,28 @@ strip.stop();
 
 A snapshot is the node as it looks now, at any scale, whether or not it is in view. It takes a
 paint or two, about 40 ms for a 1,500 by 1,000 pixel screen. In the demo, select a screen and
-press `S` to save it. Snapshots need the GPU backend; the DOM backend rejects.
+press `S` to save it.
+
+The DOM backend cannot draw a node into an image itself, so there `snapshot` rejects unless you
+give the canvas a `snapshotFallback`. Any DOM-to-image library fits; this one uses
+[SnapDOM](https://github.com/zumerlab/snapdom), which the demo does too:
+
+```ts
+import { snapdom } from '@zumer/snapdom';
+
+const canvas = await createGpuCanvas(host, {
+  async snapshotFallback(node, { scale }) {
+    // `scale` already counts the device pixel ratio, so dpr 1 keeps it from applying twice.
+    const drawn = await snapdom.toCanvas(node, { scale, dpr: 1 });
+    return drawn.getContext('2d')!.getImageData(0, 0, drawn.width, drawn.height);
+  },
+});
+```
+
+`<GpuCanvas snapshotFallback={...}>` takes the same function. Selection and hover outlines stay
+out of the image on both backends. One difference: on the DOM backend an effect is a CSS `filter`
+on the node, so a fallback snapshot includes it, while a GPU snapshot is the node without its
+effect.
 
 ## Agent view
 
