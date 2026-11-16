@@ -48,6 +48,7 @@
     "build": "tsup",
     "build:demo": "vite build demo",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "prepublishOnly": "tsc --noEmit && tsup"
   },
   "peerDependencies": {
@@ -70,6 +71,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@webgpu/types": "^0.1.60",
+    "bun-types": "^1.4.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwindcss": "4.3.3",
