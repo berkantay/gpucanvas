@@ -11,7 +11,7 @@
     "types": [
       "@webgpu/types",
       "vite/client",
-      "bun-types"
+      "bun"
     ],
     "jsx": "react-jsx",
     "strict": true,
@@ -22,6 +22,7 @@
   },
   "include": [
     "src",
-    "demo"
+    "demo",
+    "test"
   ]
 }

@@ -103,6 +103,12 @@ export function bindCameraInput(
   const onPointerUp = (event: PointerEvent) => {
     touches.delete(event.pointerId);
     if (drag?.pointerId === event.pointerId) drag = null;
+    // One finger lifted out of a pinch: the other keeps panning instead of going dead until it
+    // lifts too.
+    if (touches.size === 1) {
+      const [[pointerId, point]] = touches;
+      drag = { pointerId, x: point.x, y: point.y };
+    }
   };
 
   element.addEventListener('wheel', onWheel, { passive: false });

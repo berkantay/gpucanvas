@@ -1,6 +1,6 @@
 {
   "name": "gpucanvas",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "Put thousands of live DOM nodes on an infinite canvas: the GPU draws them, an editor selects, moves and resizes them, shaders and transitions run on them, and an AI agent can read them and point at them.",
   "keywords": [
     "canvas",
@@ -67,11 +67,14 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@remixicon/react": "^4.9.0",
     "@tailwindcss/vite": "^4.1.0",
+    "@types/bun": "^1.4.4",
+    "@types/jsdom": "^30.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@webgpu/types": "^0.1.60",
-    "bun-types": "^1.4.4",
+    "@zumer/snapdom": "^3.7.6",
+    "jsdom": "^31.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwindcss": "4.3.3",

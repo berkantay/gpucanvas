@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { fitCamera, rectToScreen, screenToWorld, worldToScreen, zoomAt, type Camera } from './camera';
+import {
+  fitCamera,
+  rectToScreen,
+  screenToWorld,
+  worldToScreen,
+  zoomAt,
+  type Camera,
+} from './camera';
 
 describe('screenToWorld / worldToScreen', () => {
   test('are inverse at zoom 1 with no offset', () => {

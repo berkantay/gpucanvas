@@ -181,7 +181,7 @@ export function createAgentView(canvas: GpuCanvas) {
 
     /**
      * An image of a world rect (an element's box when given one) as the nodes look now, at
-     * `scale` texels per world unit. GPU backend only.
+     * `scale` texels per world unit. The DOM backend needs `snapshotFallback` for it.
      */
     async capture(
       target: Rect | string | Element,

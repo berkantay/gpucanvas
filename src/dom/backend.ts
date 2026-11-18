@@ -94,13 +94,18 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
       }
     }
   };
+  /** Nodes `snapshotFallback` is drawing now, once for each snapshot under way. */
+  const capturing: HTMLElement[] = [];
   const drawOutlines = () => {
     const wanted = new Map<Element, string>();
     for (const element of selection) wanted.set(element, selectionRing);
     if (hovered && !wanted.has(hovered)) wanted.set(hovered, hoverRing);
+    // Snapshots show the node alone, as on the GPU backend: no outline on it or inside it.
+    overlay.style.visibility = capturing.length ? 'hidden' : '';
     const nextNodes = new Set<HTMLElement>();
     for (const [element, outline] of wanted) {
       if (!nodes.has(element as HTMLElement)) continue;
+      if (capturing.includes(element as HTMLElement)) continue;
       (element as HTMLElement).style.outline = outline;
       nextNodes.add(element as HTMLElement);
     }
@@ -174,8 +179,22 @@ export function createDomCanvas(host: HTMLElement, options: GpuCanvasOptions): G
     },
     // The browser repaints DOM nodes itself.
     invalidate() {},
-    snapshot: () =>
-      Promise.reject(new Error('snapshot needs the GPU backend (WebGPU and HTML-in-Canvas)')),
+    async snapshot(element, { scale = devicePixelRatio } = {}) {
+      if (!nodes.has(element)) throw new Error('Not a node on this canvas');
+      if (!options.snapshotFallback) {
+        throw new Error(
+          'snapshot needs the GPU backend (WebGPU and HTML-in-Canvas) or snapshotFallback',
+        );
+      }
+      capturing.push(element);
+      drawOutlines();
+      try {
+        return await options.snapshotFallback(element, { scale });
+      } finally {
+        capturing.splice(capturing.indexOf(element), 1);
+        drawOutlines();
+      }
+    },
     setBackground(color) {
       surface.style.background = color;
     },
